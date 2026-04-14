@@ -94,26 +94,65 @@ class AIPlayer:
         }
 
     def evaluate_position(self, board, depth, is_maximizing):
-        """Évalue une position du plateau avec une heuristique améliorée"""
+        """Évalue une position du plateau avec une heuristique forte"""
         if self.ai_type == 'random':
             return random.random()
 
         if is_board_full(board):
-            return 0  # Match nul
+            return 0
 
-        score = 0
-        player = JAUNE if is_maximizing else ROUGE
+        player   = JAUNE if is_maximizing else ROUGE
         opponent = ROUGE if is_maximizing else JAUNE
 
+        score = 0
         score += self.evaluate_alignments(board, player) * 10
         score += self.evaluate_center_control(board, player) * 5
         score += self.evaluate_column_threats(board, player, opponent) * 8
+        score += self.evaluate_double_threats(board, player, opponent) * 15
         score -= depth * 0.1
 
         return score
 
+    def evaluate_double_threats(self, board, player, opponent):
+        """Détecte les double menaces — deux alignements de 3 simultanés"""
+        score = 0
+        threat_count = 0
+        opponent_threat_count = 0
+
+        for col in range(BOARD_COLS):
+            if not is_valid_move(board, col):
+                continue
+            row = get_next_open_row(board, col)
+            if row is None:
+                continue
+
+            # Simuler le coup du joueur
+            board[row][col] = player
+            wins = 0
+            directions = [(0,1),(1,0),(1,1),(1,-1)]
+            for dr, dc in directions:
+                if self.check_alignment(board, row, col, dr, dc, player, 3):
+                    wins += 1
+            if wins >= 2:
+                threat_count += 1  # Double menace joueur
+            board[row][col] = EMPTY
+
+            # Simuler le coup adverse
+            board[row][col] = opponent
+            opp_wins = 0
+            for dr, dc in directions:
+                if self.check_alignment(board, row, col, dr, dc, opponent, 3):
+                    opp_wins += 1
+            if opp_wins >= 2:
+                opponent_threat_count += 1  # Double menace adverse
+            board[row][col] = EMPTY
+
+        score += threat_count * 500
+        score -= opponent_threat_count * 600  # Bloquer les doubles menaces adverses en priorite
+        return score
+
     def evaluate_alignments(self, board, player):
-        """Évalue les alignements potentiels de 2, 3 ou 4 pions"""
+        """Évalue les alignements avec scores renforcés"""
         opponent = ROUGE if player == JAUNE else JAUNE
         score = 0
         directions = [(0, 1), (1, 0), (1, 1), (1, -1)]
@@ -123,26 +162,35 @@ class AIPlayer:
                 if board[row][col] == EMPTY:
                     continue
                 for dr, dc in directions:
+                    # Alignements de 4
                     if self.check_alignment(board, row, col, dr, dc, player, 4):
-                        score += 1000
+                        score += 10000
                     elif self.check_alignment(board, row, col, dr, dc, opponent, 4):
-                        score -= 800
+                        score -= 9000
+
+                    # Alignements de 3 avec trou (tres dangereux)
                     if self.check_alignment_with_gap(board, row, col, dr, dc, player, 3):
-                        score += 100
+                        score += 500
                     elif self.check_alignment_with_gap(board, row, col, dr, dc, opponent, 3):
-                        score -= 80
-                    if self.check_alignment_with_gap(board, row, col, dr, dc, player, 2):
-                        score += 10
-                    elif self.check_alignment_with_gap(board, row, col, dr, dc, opponent, 2):
-                        score -= 8
+                        score -= 600
+
+                    # Alignements de 3 pleins
                     if self.check_alignment(board, row, col, dr, dc, player, 3):
-                        score += 50
+                        score += 200
                     elif self.check_alignment(board, row, col, dr, dc, opponent, 3):
-                        score -= 40
+                        score -= 250
+
+                    # Alignements de 2 avec trou
+                    if self.check_alignment_with_gap(board, row, col, dr, dc, player, 2):
+                        score += 20
+                    elif self.check_alignment_with_gap(board, row, col, dr, dc, opponent, 2):
+                        score -= 25
+
+                    # Alignements de 2 pleins
                     if self.check_alignment(board, row, col, dr, dc, player, 2):
-                        score += 5
+                        score += 10
                     elif self.check_alignment(board, row, col, dr, dc, opponent, 2):
-                        score -= 4
+                        score -= 12
 
         return score
 
@@ -268,16 +316,21 @@ class AIPlayer:
         return None
 
     def minimax(self, board, depth, is_maximizing, player, alpha=-float('inf'), beta=float('inf')):
-        """Algorithme Minimax avec élagage alpha-bêta"""
+        """Algorithme Minimax avec élagage alpha-bêta amélioré"""
         opponent = ROUGE if player == JAUNE else JAUNE
+        current = player if is_maximizing else opponent
 
-        if is_maximizing:
-            winning_move = self.check_immediate_win(board, player)
-            if winning_move is not None:
-                return float('inf'), winning_move
-            blocking_move = self.check_immediate_loss(board, player)
-            if blocking_move is not None:
-                return float('inf') - 1, blocking_move
+        # --- Vérification victoire/blocage à CHAQUE niveau ---
+        # Victoire immédiate du joueur courant
+        winning_move = self.check_immediate_win(board, current)
+        if winning_move is not None:
+            return (float('inf'), winning_move) if is_maximizing else (-float('inf'), winning_move)
+
+        # Blocage victoire adverse
+        blocking_move = self.check_immediate_loss(board, current)
+        if blocking_move is not None:
+            score = float('inf') - 1 if is_maximizing else -float('inf') + 1
+            return score, blocking_move
 
         if depth == 0 or is_board_full(board):
             return self.evaluate_position(board, self.depth - depth, is_maximizing), None
@@ -286,6 +339,7 @@ class AIPlayer:
         if not valid_moves:
             return 0, None
 
+        # Trier les coups : centre en priorité, puis coups les plus prometteurs
         valid_moves.sort(key=lambda col: abs(col - BOARD_COLS // 2))
 
         if is_maximizing:
@@ -296,8 +350,10 @@ class AIPlayer:
                 if row is not None:
                     temp_board = copy.deepcopy(board)
                     temp_board[row][col] = player
+                    # Verifier victoire directe apres le coup
+                    if check_win(temp_board, row, col, player)[0]:
+                        return float('inf'), col
                     score, _ = self.minimax(temp_board, depth - 1, False, opponent, alpha, beta)
-                    temp_board[row][col] = EMPTY
                     if score > best_score:
                         best_score = score
                         best_move = col
@@ -313,8 +369,10 @@ class AIPlayer:
                 if row is not None:
                     temp_board = copy.deepcopy(board)
                     temp_board[row][col] = opponent
+                    # Verifier victoire adverse directe apres le coup
+                    if check_win(temp_board, row, col, opponent)[0]:
+                        return -float('inf'), col
                     score, _ = self.minimax(temp_board, depth - 1, True, player, alpha, beta)
-                    temp_board[row][col] = EMPTY
                     if score < best_score:
                         best_score = score
                         best_move = col
@@ -323,32 +381,75 @@ class AIPlayer:
                         break
             return best_score, best_move
 
+    def score_move_quick(self, board, row, col, player):
+        """Évalue rapidement un coup pour trier les coups avant minimax"""
+        score = 0
+        opponent = ROUGE if player == JAUNE else JAUNE
+        directions = [(0,1),(1,0),(1,1),(1,-1)]
+
+        # Bonus centre
+        score += (BOARD_COLS // 2 - abs(col - BOARD_COLS // 2)) * 3
+        score += (BOARD_ROWS // 2 - abs(row - BOARD_ROWS // 2)) * 2
+
+        board[row][col] = player
+        for dr, dc in directions:
+            if self.check_alignment(board, row, col, dr, dc, player, 3):
+                score += 200
+            if self.check_alignment(board, row, col, dr, dc, player, 2):
+                score += 50
+            if self.check_alignment_with_gap(board, row, col, dr, dc, player, 3):
+                score += 150
+        board[row][col] = EMPTY
+
+        # Penaliser si l adversaire a des alignements sur cette colonne
+        board[row][col] = opponent
+        for dr, dc in directions:
+            if self.check_alignment(board, row, col, dr, dc, opponent, 3):
+                score += 180  # Bloquer en priorite
+        board[row][col] = EMPTY
+
+        return score
+
     def choose_move(self, board, current_player):
-        """Choisit le meilleur coup avec priorités"""
+        """Choisit le meilleur coup avec tri intelligent des coups"""
         if self.ai_type == 'random':
             valid_moves = [col for col in range(BOARD_COLS) if is_valid_move(board, col)]
             return random.choice(valid_moves) if valid_moves else None, None, {}
 
+        # 1. Victoire immediate
         winning_move = self.check_immediate_win(board, current_player)
         if winning_move is not None:
             scores = {col: 0.0 for col in range(BOARD_COLS)}
             scores[winning_move] = float('inf')
             return winning_move, float('inf'), scores
 
+        # 2. Blocage victoire adverse
         blocking_move = self.check_immediate_loss(board, current_player)
         if blocking_move is not None:
             scores = {col: 0.0 for col in range(BOARD_COLS)}
             scores[blocking_move] = float('inf') - 1
             return blocking_move, float('inf') - 1, scores
 
+        # 3. Trier les coups par score rapide avant minimax
+        # Cela ameliore l elagage alpha-beta et rend l IA plus forte
+        valid_moves = [col for col in range(BOARD_COLS) if is_valid_move(board, col)]
+        move_scores_quick = []
+        for col in valid_moves:
+            row = get_next_open_row(board, col)
+            if row is not None:
+                quick_score = self.score_move_quick(board, row, col, current_player)
+                move_scores_quick.append((col, quick_score))
+
+        # Trier du meilleur au moins bon
+        move_scores_quick.sort(key=lambda x: x[1], reverse=True)
+        sorted_moves = [col for col, _ in move_scores_quick]
+
+        # 4. Minimax sur les coups triés
         best_score = -float('inf')
         best_move = None
         scores = {}
 
-        valid_moves = [col for col in range(BOARD_COLS) if is_valid_move(board, col)]
-        valid_moves.sort(key=lambda col: abs(col - BOARD_COLS // 2))
-
-        for col in valid_moves:
+        for col in sorted_moves:
             row = get_next_open_row(board, col)
             if row is not None:
                 temp_board = copy.deepcopy(board)
@@ -580,6 +681,96 @@ def save_learning_weights(weights):
             json.dump(weights, f, indent=2)
     except Exception as e:
         print(f"Erreur lors de la sauvegarde des poids: {e}")
+
+def learn_from_database(max_games=500):
+    """Apprend depuis les parties de la BDD et ajuste les poids"""
+    try:
+        if not db_manager.test_connection():
+            print("Apprentissage annule - BDD non disponible")
+            return
+
+        # Recuperer les parties terminees avec un vainqueur
+        games, total = db_manager.get_all_games_paginated(
+            page=1, per_page=max_games,
+            sort_by='timestamp_end', sort_order='desc'
+        )
+
+        if not games:
+            print("Aucune partie trouvee pour l apprentissage")
+            return
+
+        weights = load_learning_weights()
+        lr = weights.get('learning_rate', 0.01)
+
+        jaune_wins = 0
+        rouge_wins = 0
+        total_center_moves = 0
+        total_moves = 0
+        total_game_length = 0
+        counted = 0
+
+        for game in games:
+            winner = game.get('winner')
+            history = game.get('history') or []
+
+            if not history or not winner:
+                continue
+
+            # Compter victoires
+            if winner == 'Jaune' or winner == JAUNE:
+                jaune_wins += 1
+            elif winner == 'Rouge' or winner == ROUGE:
+                rouge_wins += 1
+
+            # Analyser les coups
+            for move in history:
+                col = move[1] if isinstance(move, list) else move.get('col', 4)
+                total_moves += 1
+                # Coup au centre (colonnes 3,4,5)
+                if 3 <= col <= 5:
+                    total_center_moves += 1
+
+            total_game_length += len(history)
+            counted += 1
+
+        if counted == 0:
+            return
+
+        avg_game_length = total_game_length / counted
+        center_ratio = total_center_moves / max(total_moves, 1)
+
+        # Ajuster center_weight selon l usage du centre dans les victoires
+        if center_ratio > 0.4:
+            weights['center_weight'] = min(10.0, weights['center_weight'] + lr)
+        else:
+            weights['center_weight'] = max(3.0, weights['center_weight'] - lr)
+
+        # Ajuster three_in_row selon longueur moyenne des parties
+        # Parties courtes = victoires rapides = alignements de 3 importants
+        if avg_game_length < 20:
+            weights['three_in_row_weight'] = min(200.0, weights['three_in_row_weight'] + lr * 10)
+        elif avg_game_length > 40:
+            weights['three_in_row_weight'] = max(50.0, weights['three_in_row_weight'] - lr * 5)
+
+        # Ajuster opponent_three_weight selon ratio victoires adverses
+        total_w = jaune_wins + rouge_wins
+        if total_w > 0:
+            rouge_ratio = rouge_wins / total_w
+            # Si rouge gagne beaucoup, l IA doit mieux defendre
+            if rouge_ratio > 0.6:
+                weights['opponent_three_weight'] = max(-400.0, weights['opponent_three_weight'] - lr * 20)
+            elif rouge_ratio < 0.3:
+                weights['opponent_three_weight'] = min(-100.0, weights['opponent_three_weight'] + lr * 10)
+
+        save_learning_weights(weights)
+        print(f"Apprentissage termine sur {counted} parties")
+        print(f"  Victoires Jaune: {jaune_wins} | Rouge: {rouge_wins}")
+        print(f"  Longueur moyenne: {avg_game_length:.1f} coups")
+        print(f"  Nouveaux poids: center={weights['center_weight']:.2f}, three={weights['three_in_row_weight']:.2f}, opp={weights['opponent_three_weight']:.2f}")
+
+    except Exception as e:
+        print(f"Erreur lors de l apprentissage: {e}")
+        traceback.print_exc()
 
 def save_finished_game_to_db(game_state):
     """Sauvegarde une partie terminée dans la base de données"""
@@ -1742,6 +1933,26 @@ def before_request():
             app.db_checked = db_manager.test_connection()
         except Exception:
             app.db_checked = False
+    # Apprentissage automatique au premier demarrage
+    if not hasattr(app, 'learned'):
+        app.learned = True
+        thread = Thread(target=learn_from_database, args=(500,))
+        thread.daemon = True
+        thread.start()
+        print("Apprentissage depuis la BDD lance en arriere-plan")
+
+
+@app.route('/learn_from_db')
+def learn_from_db():
+    """Déclenche l apprentissage depuis la BDD manuellement"""
+    try:
+        thread = Thread(target=learn_from_database, args=(1000,))
+        thread.daemon = True
+        thread.start()
+        flash("Apprentissage depuis la base de données lancé !", "success")
+    except Exception as e:
+        flash(f"Erreur: {str(e)}", "error")
+    return redirect(url_for('view_learning_weights'))
 
 
 # ====================== ROUTES DE JEU (AFFICHAGE) ======================
