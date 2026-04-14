@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Choisir un mode de jeu - Puissance 4{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="text-center mb-5">Choisissez un mode de jeu</h1>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card-deck">
+                <!-- Mode Joueur vs Joueur -->
+                <div class="card mb-4">
+                    <div class="card-body text-center">
+                        <i class="bi bi-people-fill mb-3" style="font-size: 3rem; color: #0d6efd;"></i>
+                        <h5 class="card-title">Joueur vs Joueur</h5>
+                        <p class="card-text">Jouez contre un autre joueur humain.</p>
+                        <a href="{{ url_for('start_game', mode=2) }}" class="btn btn-primary btn-lg">
+                            <i class="bi bi-play-circle"></i> Commencer
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Mode Joueur vs IA -->
+                <div class="card mb-4">
+                    <div class="card-body text-center">
+                        <i class="bi bi-person-plus-fill mb-3" style="font-size: 3rem; color: #6f42c1;"></i>
+                        <h5 class="card-title">Joueur vs IA</h5>
+                        <p class="card-text">Choisissez le type d'IA:</p>
+                        <div class="d-grid gap-2">
+                            <a href="{{ url_for('start_game', mode=1, ai_type='minimax') }}" class="btn btn-success btn-lg">
+                                <i class="bi bi-robot"></i> Minimax
+                            </a>
+                            <a href="{{ url_for('start_game', mode=1, ai_type='random') }}" class="btn btn-warning btn-lg">
+                                <i class="bi bi-dice-5"></i> Aléatoire
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mode IA vs IA -->
+                <div class="card mb-4">
+                    <div class="card-body text-center">
+                        <i class="bi bi-cpu-fill mb-3" style="font-size: 3rem; color: #6c757d;"></i>
+                        <h5 class="card-title">IA vs IA</h5>
+                        <p class="card-text">Regardez deux IA s'affronter.</p>
+                        <a href="{{ url_for('start_game', mode=0) }}" class="btn btn-secondary btn-lg">
+                            <i class="bi bi-play-circle"></i> Commencer
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center mt-4">
+                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Retour à l'accueil
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

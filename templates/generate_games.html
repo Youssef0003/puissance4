@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Générer des parties{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="text-center mb-4">Générer des parties pour la base de données</h1>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('generate_games') }}">
+                <div class="mb-3">
+                    <label for="num_games" class="form-label">Nombre de parties à générer</label>
+                    <input type="number" class="form-control" id="num_games" name="num_games"
+                           min="1" max="10000" value="100" required>
+                </div>
+
+                <div class="mb-3">
+                    <label for="game_type" class="form-label">Type de parties</label>
+                    <select class="form-select" id="game_type" name="game_type">
+                        <option value="random">Parties aléatoires (IA Random vs IA Random)</option>
+                        <option value="minimax">Parties Minimax (IA Minimax vs IA Minimax)</option>
+                        <option value="random_vs_minimax">Random vs Minimax (IA Random vs IA Minimax)</option>
+                    </select>
+                </div>
+
+                <div class="mb-3" id="minimax_depth_container" style="display: none;">
+                    <label for="minimax_depth" class="form-label">Profondeur Minimax</label>
+                    <input type="number" class="form-control" id="minimax_depth" name="minimax_depth"
+                           min="1" max="7" value="3">
+                    <div class="form-text">Profondeur de recherche pour l'IA Minimax (1-7)</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="batch_size" class="form-label">Taille du batch</label>
+                    <input type="number" class="form-control" id="batch_size" name="batch_size"
+                           min="1" max="100" value="10" required>
+                    <div class="form-text">Nombre de parties générées avant mise à jour de la progression</div>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="bi bi-play"></i> Démarrer la génération
+                    </button>
+                    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary btn-lg">
+                        <i class="bi bi-arrow-left"></i> Retour à l'accueil
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Afficher/Masquer la profondeur Minimax en fonction du type de partie sélectionné
+document.getElementById('game_type').addEventListener('change', function() {
+    const depthContainer = document.getElementById('minimax_depth_container');
+    if (this.value === 'minimax' || this.value === 'random_vs_minimax') {
+        depthContainer.style.display = 'block';
+    } else {
+        depthContainer.style.display = 'none';
+    }
+});
+
+// Vérifier au chargement de la page
+window.addEventListener('DOMContentLoaded', function() {
+    const gameType = document.getElementById('game_type');
+    const depthContainer = document.getElementById('minimax_depth_container');
+    if (gameType.value === 'minimax' || gameType.value === 'random_vs_minimax') {
+        depthContainer.style.display = 'block';
+    }
+});
+</script>
+{% endblock %}

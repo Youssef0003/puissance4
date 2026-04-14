@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Progression de la génération{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="text-center mb-4">Progression de la génération</h1>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Statistiques</h5>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-subtitle mb-2 text-muted">Progression</h6>
+                            <div class="progress mb-2">
+                                <div class="progress-bar" role="progressbar"
+                                     style="width: {{ progress }}%"
+                                     aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100">
+                                    {{ "%.1f"|format(progress) }}%
+                                </div>
+                            </div>
+                            <p class="card-text">
+                                {{ success }} parties générées avec succès sur {{ total }} demandées
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-subtitle mb-2 text-muted">Base de données</h6>
+                            <div class="display-4 text-center mb-2">{{ db_count }}</div>
+                            <p class="card-text text-center">parties dans la base</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% if not finished %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> La génération est en cours...
+                {% if current_batch > 0 %}
+                <div class="mt-2">Batch actuel: {{ current_batch }} parties traitées</div>
+                {% endif %}
+            </div>
+
+            <div class="d-grid gap-2">
+                <a href="{{ url_for('generation_progress') }}" class="btn btn-primary">
+                    <i class="bi bi-arrow-clockwise"></i> Actualiser
+                </a>
+                <a href="{{ url_for('view_database') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-database"></i> Voir la base de données
+                </a>
+            </div>
+            {% else %}
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle"></i> Génération terminée avec succès !
+            </div>
+
+            <div class="d-grid gap-2">
+                <a href="{{ url_for('generate_games') }}" class="btn btn-primary">
+                    <i class="bi bi-plus"></i> Générer d'autres parties
+                </a>
+                <a href="{{ url_for('view_database') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-database"></i> Voir la base de données
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

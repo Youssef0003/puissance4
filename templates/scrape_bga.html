@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Scraping BGA - Puissance 4{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="text-center mb-4">Scraping Board Game Arena</h1>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Configuration du scraping</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('start_scraping') }}">
+                        <div class="mb-3">
+                            <label for="rows" class="form-label">Nombre de lignes du plateau</label>
+                            <input type="number" class="form-control" id="rows" name="rows"
+                                   value="{{ default_rows|default(9) }}" min="4" max="20" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="cols" class="form-label">Nombre de colonnes du plateau</label>
+                            <input type="number" class="form-control" id="cols" name="cols"
+                                   value="{{ default_cols|default(9) }}" min="4" max="20" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="player_ids" class="form-label">IDs des joueurs (séparés par des virgules)</label>
+                            <textarea class="form-control" id="player_ids" name="player_ids" rows="3"
+                                      placeholder="Exemple: 93463692,12345678,87654321">{{ default_player_ids|join(',') }}</textarea>
+                            <div class="form-text">
+                                Entrez les IDs des joueurs dont vous voulez scraper les parties.
+                            </div>
+                        </div>
+
+                        <div class="text-center">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-robot"></i> Lancer le scraping
+                            </button>
+                            <a href="{{ url_for('index') }}" class="btn btn-outline-secondary btn-lg">
+                                <i class="bi bi-arrow-left"></i> Annuler
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">Informations</h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <h5><i class="bi bi-info-circle"></i> À propos du scraping BGA</h5>
+                <p>Cette fonctionnalité permet de récupérer des parties jouées sur Board Game Arena (BGA) pour les analyser.</p>
+                <p>Pour utiliser cette fonctionnalité:</p>
+                <ol>
+                    <li>Entrez les IDs des joueurs dont vous voulez récupérer les parties</li>
+                    <li>Spécifiez la taille du plateau (doit correspondre à celle des parties à scraper)</li>
+                    <li>Cliquez sur "Lancer le scraping"</li>
+                </ol>
+                <p class="mb-0">Une fois le scraping terminé, vous pourrez importer les séquences de coups dans de nouvelles parties.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

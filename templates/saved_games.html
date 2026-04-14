@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block title %}Parties sauvegardées - Puissance 4{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="text-center mb-4">Parties sauvegardées localement</h1>
+
+    <!-- Formulaire de chargement avec changement de mode -->
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">Charger une partie avec un mode différent</h5>
+        </div>
+        <div class="card-body">
+            <form id="loadGameForm" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label for="gameId" class="form-label">ID de la partie</label>
+                    <select class="form-select" id="gameId" name="game_id" required>
+                        <option value="" selected disabled>Sélectionnez une partie</option>
+                        {% for game in games %}
+                        <option value="{{ game.game_id }}">
+                            {{ game.game_id[:8] }}... — {{ game.mode_name }} —
+                            {% if game.game_over %}
+                                Terminée
+                            {% else %}
+                                {{ game.current_player }} à jouer
+                            {% endif %}
+                            ({{ game.timestamp.strftime('%d/%m %H:%M') }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label for="gameMode" class="form-label">Nouveau mode</label>
+                    <select class="form-select" id="gameMode" name="mode" required>
+                        <option value="" selected disabled>Sélectionnez un mode</option>
+                        <option value="0">IA vs IA (Aléatoire)</option>
+                        <option value="1">Joueur (Rouge) vs IA</option>
+                        <option value="2">Joueur vs Joueur</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2" id="aiTypeContainer" style="display: none;">
+                    <label for="aiType" class="form-label">Type d'IA (Jaune)</label>
+                    <select class="form-select" id="aiType" name="ai_type">
+                        <option value="random">Aléatoire</option>
+                        <option value="minimax" selected>Minimax (recommandé)</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2" id="depthContainer" style="display: none;">
+                    <label for="aiDepth" class="form-label">Profondeur Minimax</label>
+                    <select class="form-select" id="aiDepth" name="depth">
+                        {% for d in range(1, 8) %}
+                        <option value="{{ d }}" {% if d == 5 %}selected{% endif %}>Niveau {{ d }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label d-none d-md-block">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-play"></i> Charger
+                    </button>
+                </div>
+
+                <div class="col-12">
+                    <div class="alert alert-warning small mb-0">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Important :</strong>
+                        En mode <strong>Joueur vs IA</strong>, vous jouez toujours <strong>Rouge</strong>.
+                        Si c'est au tour de Jaune au chargement, l'IA joue automatiquement.
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Liste des parties -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Liste des parties sauvegardées ({{ games|length }})</h5>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('index') }}" class="btn btn-secondary btn-sm">
+                    <i class="bi bi-house"></i> Retour à l'accueil
+                </a>
+                <a href="{{ url_for('custom_board') }}" class="btn btn-success btn-sm">
+                    <i class="bi bi-plus-circle"></i> Nouveau plateau personnalisé
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if games %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Date</th>
+                            <th>Mode</th>
+                            <th>Type IA</th>
+                            <th>Profondeur</th>
+                            <th>Coups</th>
+                            <th>Tour / Résultat</th>
+                            <th>Statut</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for game in games %}
+                        <tr>
+                            <!-- ID tronqué avec tooltip -->
+                            <td>
+                                <span class="font-monospace text-muted small" title="{{ game.game_id }}">
+                                    {{ game.game_id[:8] }}...
+                                </span>
+                            </td>
+
+                            <!-- Date depuis le JSON (ou le fichier) -->
+                            <td>{{ game.timestamp.strftime('%d/%m/%Y %H:%M') }}</td>
+
+                            <!-- Mode -->
+                            <td>
+                                <span class="badge bg-{{ {0: 'secondary', 1: 'info', 2: 'primary'}[game.mode] }}">
+                                    {{ game.mode_name }}
+                                </span>
+                            </td>
+
+                            <!-- Type IA -->
+                            <td>
+                                {% if game.ai_type == 'minimax' %}
+                                    <span class="badge bg-warning text-dark">minimax</span>
+                                {% elif game.ai_type == 'random' %}
+                                    <span class="badge bg-light text-dark border">random</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Profondeur -->
+                            <td>
+                                {% if game.mode == 1 and game.ai_type == 'minimax' %}
+                                    <span class="badge bg-secondary">Niv. {{ game.ai_depth }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Nombre de coups -->
+                            <td>{{ game.move_count }}</td>
+
+                            <!-- Tour ou résultat -->
+                            <td>
+                                {% if game.game_over %}
+                                    {% set w = game.winner %}
+                                    {% if w == 0 or w == 'Nul' %}
+                                        <span class="badge bg-secondary">Match nul</span>
+                                    {% elif w == 1 or w == 'Rouge' %}
+                                        <span class="badge bg-danger">Rouge gagne</span>
+                                    {% elif w == 2 or w == 'Jaune' %}
+                                        <span class="badge bg-warning text-dark">Jaune gagne</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Terminée</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge bg-{{ 'danger' if game.current_player == 'Rouge' else 'warning text-dark' }}">
+                                        {{ game.current_player }} à jouer
+                                    </span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Statut -->
+                            <td>
+                                {% if game.game_over %}
+                                    <span class="badge bg-success">Terminée</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">En cours</span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Actions -->
+                            <td>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-primary dropdown-toggle" type="button"
+                                            data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="bi bi-three-dots"></i> Actions
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <a class="dropdown-item"
+                                               href="{{ url_for('load_game', game_id=game.game_id) }}">
+                                                <i class="bi bi-play me-2"></i> Charger (mode original)
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <a class="dropdown-item"
+                                               href="{{ url_for('load_game', game_id=game.game_id) }}?mode=0">
+                                                <i class="bi bi-cpu me-2"></i> Charger en IA vs IA
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item"
+                                               href="{{ url_for('load_game', game_id=game.game_id) }}?mode=1&ai_type=minimax">
+                                                <i class="bi bi-person-plus me-2"></i> Joueur vs IA (Minimax)
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item"
+                                               href="{{ url_for('load_game', game_id=game.game_id) }}?mode=1&ai_type=random">
+                                                <i class="bi bi-person-plus me-2"></i> Joueur vs IA (Aléatoire)
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item"
+                                               href="{{ url_for('load_game', game_id=game.game_id) }}?mode=2">
+                                                <i class="bi bi-people me-2"></i> Joueur vs Joueur
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <button class="dropdown-item text-danger"
+                                                    onclick="deleteGame('{{ game.game_id }}')">
+                                                <i class="bi bi-trash me-2"></i> Supprimer
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> Aucune partie sauvegardée localement.
+                <a href="{{ url_for('custom_board') }}" class="alert-link">Créez un nouveau plateau personnalisé</a>
+                ou <a href="{{ url_for('choose_mode') }}" class="alert-link">commencez une nouvelle partie</a>.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const gameModeSelect  = document.getElementById('gameMode');
+    const aiTypeContainer = document.getElementById('aiTypeContainer');
+    const depthContainer  = document.getElementById('depthContainer');
+    const aiTypeSelect    = document.getElementById('aiType');
+
+    gameModeSelect.addEventListener('change', function () {
+        if (this.value === '1') {
+            aiTypeContainer.style.display = 'block';
+            depthContainer.style.display  = aiTypeSelect.value === 'minimax' ? 'block' : 'none';
+        } else {
+            aiTypeContainer.style.display = 'none';
+            depthContainer.style.display  = 'none';
+        }
+    });
+
+    aiTypeSelect.addEventListener('change', function () {
+        depthContainer.style.display = this.value === 'minimax' ? 'block' : 'none';
+    });
+
+    document.getElementById('loadGameForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        const gameId = document.getElementById('gameId').value;
+        const mode   = document.getElementById('gameMode').value;
+        const aiType = document.getElementById('aiType').value;
+        const depth  = document.getElementById('aiDepth').value;
+
+        if (!gameId || !mode) {
+            alert('Veuillez sélectionner une partie et un mode de jeu');
+            return;
+        }
+
+        let url = `/load_game/${gameId}?mode=${mode}`;
+        if (mode === '1') {
+            url += `&ai_type=${aiType}`;
+            if (aiType === 'minimax') {
+                url += `&depth=${depth}`;
+            }
+        }
+        window.location.href = url;
+    });
+
+    window.deleteGame = function (gameId) {
+        if (!confirm('Voulez-vous vraiment supprimer cette partie ? Cette action est irréversible.')) return;
+        fetch(`/delete_game/${gameId}`, {
+            method: 'DELETE',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success') {
+                window.location.reload();
+            } else {
+                alert(data.message || 'Erreur lors de la suppression');
+            }
+        })
+        .catch(() => alert('Erreur lors de la suppression'));
+    };
+});
+</script>
+{% endblock %}

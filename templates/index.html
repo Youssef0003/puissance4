@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Puissance 4 - Accueil{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="text-center mb-4">Puissance 4</h1>
+
+    <div class="row justify-content-center mb-5">
+        <div class="col-md-10 col-lg-8">
+            <div class="card text-center shadow">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="mb-0">Bienvenue !</h2>
+                </div>
+                <div class="card-body p-4">
+                    <p class="card-text fs-5 mb-4">Choisissez un mode de jeu pour commencer une nouvelle partie ou accédez à vos parties existantes.</p>
+
+                    <div class="row g-3">
+                        <!-- Nouvelle partie -->
+                        <div class="col-md-6 col-lg-4">
+                            <div class="d-grid gap-2">
+                                <a href="{{ url_for('choose_mode') }}" class="btn btn-primary btn-lg">
+                                    <i class="bi bi-play-circle me-2"></i> Nouvelle partie
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Importer une partie -->
+                        <div class="col-md-6 col-lg-4">
+                            <div class="d-grid gap-2">
+                                <a href="{{ url_for('import_game') }}" class="btn btn-info btn-lg">
+                                    <i class="bi bi-upload me-2"></i> Importer une partie
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Créer un plateau personnalisé -->
+                        <div class="col-md-6 col-lg-4">
+                            <div class="d-grid gap-2">
+                                <a href="{{ url_for('custom_board') }}" class="btn btn-success btn-lg">
+                                    <i class="bi bi-pencil-square me-2"></i> Déssiner un plateau
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Générer des parties IA -->
+                        <div class="col-md-6 col-lg-4">
+                            <div class="d-grid gap-2">
+                                <a href="{{ url_for('generate_games') }}" class="btn btn-warning btn-lg">
+                                    <i class="bi bi-robot me-2"></i> Générer des parties
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Parties sauvegardées -->
+                        <div class="col-md-6 col-lg-4">
+                            <div class="d-grid gap-2">
+                                <a href="{{ url_for('saved_games') }}" class="btn btn-light btn-lg border">
+                                    <i class="bi bi-save me-2"></i> Parties sauvegardées
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Base de données -->
+                        <div class="col-md-6 col-lg-4">
+                            <div class="d-grid gap-2">
+                                <a href="{{ url_for('view_database') }}" class="btn btn-secondary btn-lg">
+                                    <i class="bi bi-database me-2"></i> Base de données
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Accès rapide -->
+                    <div class="mt-5 pt-3 border-top">
+                        <h3 class="mb-3">Accès rapide</h3>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="d-grid gap-2">
+                                    <a href="{{ url_for('start_game', mode=2) }}" class="btn btn-outline-primary">
+                                        <i class="bi bi-people me-2"></i> Joueur vs Joueur
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="d-grid gap-2">
+                                    <a href="{{ url_for('start_game', mode=1, ai_type='random') }}" class="btn btn-outline-info">
+                                        <i class="bi bi-person-plus me-2"></i> vs IA Aléatoire
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="d-grid gap-2">
+                                    <a href="{{ url_for('start_game', mode=1, ai_type='minimax') }}" class="btn btn-outline-warning">
+                                        <i class="bi bi-cpu me-2"></i> vs IA Minimax
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section d'information -->
+    <div class="row justify-content-center mb-5">
+        <div class="col-md-10 col-lg-8">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h3 class="mb-0">À propos du jeu</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h4>Règles du jeu</h4>
+                            <p>Le Puissance 4 est un jeu de stratégie où deux joueurs s'affrontent en laissant tomber des jetons dans une grille verticale.</p>
+                            <p>Le but est d'aligner 4 jetons de sa couleur horizontalement, verticalement ou en diagonale.</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h4>Fonctionnalités</h4>
+                            <ul>
+                                <li>3 modes de jeu différents</li>
+                                <li>IA avec algorithme Minimax</li>
+                                <li>Sauvegarde et chargement de parties</li>
+                                <li>Historique des coups</li>
+                                <li>Visualisation des scores Minimax</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

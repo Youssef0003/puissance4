@@ -1,0 +1,596 @@
+{% extends "base.html" %}
+
+{% set title = "IA vs IA - Puissance 4" %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/game_styles.css') }}">
+<style>
+    .game-container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    .game-board {
+        background-color: #1a1a2e;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+    .column-headers {
+        display: flex;
+        justify-content: space-around;
+        margin-bottom: 10px;
+    }
+    .column-header {
+        width: 60px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 5px;
+    }
+    .board {
+        display: flex;
+        flex-direction: column;
+    }
+    .row {
+        display: flex;
+        justify-content: space-around;
+        margin-bottom: 5px;
+    }
+    .cell {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background-color: #3a3a4e;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s;
+    }
+    .cell.player-1 {
+        background-color: #ff0000;
+        box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+    }
+    .cell.player-2 {
+        background-color: #ffcc00;
+        box-shadow: 0 0 10px rgba(255, 204, 0, 0.5);
+    }
+    .winning-cell {
+        animation: winning-pulse 1.5s infinite;
+        transform: scale(1.05);
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.7);
+    }
+    .last-move {
+        animation: pulse 0.5s ease;
+        box-shadow: 0 0 10px rgba(255, 255, 0, 0.7);
+    }
+    .token-fall {
+        animation: token-fall 0.5s ease-out;
+    }
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+    }
+    @keyframes winning-pulse {
+        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); }
+        50% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(255, 215, 0, 0.5); }
+        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+    }
+    @keyframes token-fall {
+        0% { transform: translateY(-100px); opacity: 0; }
+        100% { transform: translateY(0); opacity: 1; }
+    }
+    .game-over-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+    .game-over-content {
+        background-color: white;
+        padding: 30px;
+        border-radius: 10px;
+        text-align: center;
+        max-width: 500px;
+        width: 90%;
+    }
+    .game-over-content h2 {
+        color: #333;
+        margin-bottom: 20px;
+    }
+    .game-over-content p {
+        margin-bottom: 20px;
+        font-size: 1.1em;
+    }
+    .game-over-buttons {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+    }
+
+    /* Styles pour l'historique des coups */
+    .game-history {
+        background-color: #1a1a2e;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        height: 100%;
+    }
+    .history-header {
+        color: white;
+        margin-bottom: 15px;
+        font-size: 1.2em;
+        text-align: center;
+    }
+    .history-list {
+        max-height: 450px;
+        overflow-y: auto;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .history-item {
+        background-color: rgba(255, 255, 255, 0.05);
+        margin-bottom: 8px;
+        padding: 10px;
+        border-radius: 5px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: all 0.2s;
+    }
+    .history-item:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+    .history-item.last-move {
+        background-color: rgba(255, 255, 255, 0.15);
+        border-left: 3px solid #ffcc00;
+    }
+    .player-badge {
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-weight: bold;
+        font-size: 0.9em;
+    }
+    .player-badge.red {
+        background-color: #ff0000;
+        color: white;
+    }
+    .player-badge.yellow {
+        background-color: #ffcc00;
+        color: #333;
+    }
+    .move-info {
+        color: white;
+        font-size: 0.95em;
+    }
+    .move-number {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.9em;
+    }
+    .play-btn {
+        margin-top: 20px;
+        padding: 12px 30px;
+        font-size: 1.2em;
+        font-weight: bold;
+    }
+    .playing-indicator {
+        display: none;
+        margin-left: 10px;
+        color: #0dcaf0;
+    }
+    .disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="game-container">
+    <h1 class="text-center mb-4">Mode IA vs IA</h1>
+
+    <div class="row">
+        <!-- Plateau de jeu (colonne principale) -->
+        <div class="col-lg-8">
+            <div class="game-info mb-3">
+                <div class="player-turn">
+                    <span class="player-indicator {% if game_state.current_player == 1 %}red{% else %}yellow{% endif %}"></span>
+                    <span id="current-player-text">Tour: {{ "IA Rouge" if game_state.current_player == 1 else "IA Jaune" }}</span>
+                    <span id="playing-indicator" class="playing-indicator">
+                        <i class="fas fa-spinner fa-pulse"></i> En cours...
+                    </span>
+                </div>
+            </div>
+
+            <div class="game-board">
+                <div class="column-headers">
+                    {% for col in range(9) %}
+                    <div class="column-header">
+                        <span class="column-number">{{ col+1 }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="board">
+                    {% for row in range(9) %}
+                    <div class="row">
+                        {% for col in range(9) %}
+                        <div class="cell
+                            {% if game_state.board[row][col] == 1 %}player-1
+                            {% elif game_state.board[row][col] == 2 %}player-2
+                            {% else %}empty-cell{% endif %}
+                            {% if game_state.winning_cells and [row, col] in game_state.winning_cells %} winning-cell{% endif %}
+                            {% if game_state.last_move and game_state.last_move[0] == row and game_state.last_move[1] == col %} last-move token-fall{% endif %}"
+                             data-row="{{ row }}" data-col="{{ col }}">
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="game-controls mt-4 d-flex justify-content-center gap-3">
+                <button id="play-btn" class="btn btn-primary play-btn">
+                    <i class="fas fa-play me-2"></i>Jouer la partie
+                </button>
+
+                <div class="d-flex justify-content-center gap-3 mt-2">
+                    <button id="undo-btn" class="btn btn-warning {% if not game_state.move_history %}disabled{% endif %}">
+                        <i class="fas fa-undo me-2"></i>Annuler
+                    </button>
+                    <a href="{{ url_for('save_game') }}" class="btn btn-success">
+                        <i class="fas fa-save me-2"></i>Sauvegarder
+                    </a>
+                    <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                        <i class="fas fa-home me-2"></i>Accueil
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Historique des coups (colonne secondaire) -->
+        <div class="col-lg-4">
+            <div class="game-history">
+                <div class="history-header">Historique des coups</div>
+                <ol class="history-list">
+                    {% if game_state.move_history %}
+                        {% for move in game_state.move_history %}
+                        <li class="history-item {% if loop.last and not game_state.game_over %}last-move{% endif %}">
+                            <span class="player-badge {% if move[2] == 1 %}red{% else %}yellow{% endif %}">
+                                {{ 'R' if move[2] == 1 else 'J' }}
+                            </span>
+                            <span class="move-info">
+                                Col {{ move[1]+1 }}, L{{ 9-move[0] }}
+                            </span>
+                            <span class="move-number">Coup {{ loop.index }}</span>
+                        </li>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center text-muted p-3">Aucun coup joué</div>
+                    {% endif %}
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlay de fin de partie -->
+    <div id="game-over-overlay" class="game-over-overlay" style="display: {% if game_state.game_over %}flex{% else %}none{% endif %};">
+        <div class="game-over-content">
+            <h2 id="game-over-title">
+                {% if game_state.winner == 0 %}
+                    Match nul!
+                {% elif game_state.winner == 1 %}
+                    L'IA ROUGE a gagné!
+                {% elif game_state.winner == 2 %}
+                    L'IA JAUNE a gagné!
+                {% endif %}
+            </h2>
+            <p id="game-over-message">
+                {% if game_state.winner == 0 %}
+                    La partie s'est terminée sur un match nul.
+                {% elif game_state.winner == 1 %}
+                    L'IA ROUGE a remporté la victoire!
+                {% elif game_state.winner == 2 %}
+                    L'IA JAUNE a remporté la victoire!
+                {% endif %}
+            </p>
+            <div class="game-over-buttons">
+                <button id="replay-overlay-btn" class="btn btn-primary">
+                    <i class="fas fa-redo me-2"></i>Recommencer
+                </button>
+                <button id="home-overlay-btn" class="btn btn-secondary">
+                    <i class="fas fa-home me-2"></i>Accueil
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ROUGE = 1;
+    const JAUNE = 2;
+    let isProcessing = false;
+    let gameOver = {{ game_state.game_over|tojson|safe }};
+    let isPlaying = false;
+    let playInterval = null;
+
+    // Désactiver le bouton si la partie est terminée
+    if (gameOver) {
+        document.getElementById('play-btn').disabled = true;
+    }
+
+    // Bouton Jouer la partie
+    document.getElementById('play-btn').addEventListener('click', function() {
+        if (isPlaying) {
+            // Arrêter la partie
+            isPlaying = false;
+            this.innerHTML = '<i class="fas fa-play me-2"></i>Jouer la partie';
+            document.getElementById('playing-indicator').style.display = 'none';
+
+            // Annuler le timer si nécessaire
+            if (playInterval) {
+                clearInterval(playInterval);
+                playInterval = null;
+            }
+        } else {
+            // Démarrer la partie
+            isPlaying = true;
+            this.innerHTML = '<i class="fas fa-stop me-2"></i>Arrêter';
+            document.getElementById('playing-indicator').style.display = 'inline';
+
+            // Démarrer le jeu
+            playNextMove();
+        }
+    });
+
+    function playNextMove() {
+        if (!isPlaying || gameOver) {
+            return;
+        }
+
+        if (isProcessing) {
+            // Si un coup est déjà en cours, réessayer plus tard
+            setTimeout(playNextMove, 500);
+            return;
+        }
+
+        isProcessing = true;
+
+        // Utiliser la route dédiée pour IA vs IA
+        fetch('/play_ia_vs_ia', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erreur HTTP: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                console.error('Erreur:', data.error);
+                alert(data.error);
+                stopGame();
+                return;
+            }
+
+            // Mettre à jour le plateau
+            updateBoard(data.board);
+
+            // Animer le dernier jeton placé
+            if (data.last_move) {
+                const [row, col] = data.last_move;
+                const player = data.board[row][col];
+                animateTokenDrop(row, col, player);
+                updateMoveHistory(data.move_history);
+            }
+
+            // Mettre à jour le joueur courant
+            if (!data.game_over && data.current_player !== null) {
+                updateCurrentPlayer(data.current_player);
+            } else {
+                gameOver = true;
+                stopGame();
+            }
+
+            // Mettre en évidence les cellules gagnantes
+            if (data.winning_cells) {
+                highlightWinningCells(data.winning_cells);
+            }
+
+            if (data.game_over) {
+                gameOver = true;
+                stopGame();
+                showGameOver(
+                    data.winner === "Nul" ? "Nul" :
+                    data.winner === 1 ? "Rouge" : "Jaune"
+                );
+            } else if (isPlaying) {
+                // Jouer le prochain coup après un délai
+                playInterval = setTimeout(playNextMove, 800);
+            }
+
+            isProcessing = false;
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            alert('Une erreur est survenue: ' + error.message);
+            stopGame();
+            isProcessing = false;
+        });
+    }
+
+    function stopGame() {
+        isPlaying = false;
+        document.getElementById('play-btn').innerHTML = '<i class="fas fa-play me-2"></i>Jouer la partie';
+        document.getElementById('playing-indicator').style.display = 'none';
+        document.getElementById('play-btn').disabled = gameOver;
+
+        if (playInterval) {
+            clearInterval(playInterval);
+            playInterval = null;
+        }
+    }
+
+    function updateBoard(boardData) {
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach(cell => {
+            const row = parseInt(cell.getAttribute('data-row'));
+            const col = parseInt(cell.getAttribute('data-col'));
+            const value = boardData[row][col];
+
+            // Conserver les classes winning-cell et last-move
+            const hasWinning = cell.classList.contains('winning-cell');
+            const hasLastMove = cell.classList.contains('last-move');
+
+            cell.className = 'cell empty-cell';
+            if (value === ROUGE) cell.classList.add('player-1');
+            else if (value === JAUNE) cell.classList.add('player-2');
+
+            if (hasWinning) cell.classList.add('winning-cell');
+            if (hasLastMove) cell.classList.add('last-move');
+        });
+    }
+
+    function animateTokenDrop(row, col, player) {
+        const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+        if (cell) {
+            // Supprimer les classes existantes sauf winning-cell
+            const hasWinning = cell.classList.contains('winning-cell');
+            cell.className = 'cell empty-cell';
+            if (hasWinning) cell.classList.add('winning-cell');
+
+            // Ajouter la classe du joueur et l'animation de chute
+            cell.classList.add(`player-${player}`);
+            cell.classList.add('token-fall');
+            cell.classList.add('last-move');
+
+            // Supprimer l'animation après qu'elle soit terminée
+            setTimeout(() => {
+                cell.classList.remove('token-fall');
+            }, 500);
+        }
+    }
+
+    function updateMoveHistory(moveHistory) {
+        const historyList = document.querySelector('.history-list');
+        historyList.innerHTML = '';
+
+        if (!moveHistory || moveHistory.length === 0) {
+            historyList.innerHTML = '<div class="text-center text-muted p-3">Aucun coup joué</div>';
+            return;
+        }
+
+        moveHistory.forEach((move, index) => {
+            const item = document.createElement('li');
+            item.className = 'history-item';
+            if (index === moveHistory.length - 1 && !gameOver) {
+                item.classList.add('last-move');
+            }
+
+            const playerClass = move[2] === ROUGE ? 'red' : 'yellow';
+            const playerText = move[2] === ROUGE ? 'R' : 'J';
+
+            item.innerHTML = `
+                <span class="player-badge ${playerClass}">${playerText}</span>
+                <span class="move-info">Col ${move[1]+1}, L${9-move[0]}</span>
+                <span class="move-number">Coup ${index + 1}</span>
+            `;
+
+            historyList.appendChild(item);
+        });
+
+        // Faire défiler vers le bas
+        historyList.scrollTop = historyList.scrollHeight;
+    }
+
+    function updateCurrentPlayer(player) {
+        const indicator = document.querySelector('.player-indicator');
+        const text = document.querySelector('#current-player-text');
+
+        if (indicator) {
+            indicator.className = 'player-indicator';
+            indicator.classList.add(player === ROUGE ? 'red' : 'yellow');
+        }
+
+        if (text) {
+            text.textContent = `Tour: ${player === ROUGE ? 'IA Rouge' : 'IA Jaune'}`;
+        }
+    }
+
+    function highlightWinningCells(winningCells) {
+        winningCells.forEach(([row, col]) => {
+            const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+            if (cell) cell.classList.add('winning-cell');
+        });
+    }
+
+    function showGameOver(winner) {
+        const overlay = document.getElementById('game-over-overlay');
+        const title = document.getElementById('game-over-title');
+        const message = document.getElementById('game-over-message');
+
+        if (winner === "Nul") {
+            title.textContent = "Match nul!";
+            message.textContent = "La partie s'est terminée sur un match nul.";
+        } else {
+            title.textContent = `L'IA ${winner} a gagné!`;
+            message.textContent = `L'IA ${winner} a remporté la victoire!`;
+        }
+
+        overlay.style.display = 'flex';
+    }
+
+    // Bouton Annuler
+    document.getElementById('undo-btn').addEventListener('click', function() {
+        if (this.classList.contains('disabled')) return;
+        if (isPlaying) {
+            stopGame();
+        }
+
+        if (isProcessing) return;
+
+        fetch('/undo', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'}
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+            window.location.reload();
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            alert('Une erreur est survenue');
+        });
+    });
+
+    // Boutons de l'overlay
+    document.getElementById('replay-overlay-btn').addEventListener('click', function() {
+        window.location.href = '{{ url_for("start_game", mode=0) }}';
+    });
+
+    document.getElementById('home-overlay-btn').addEventListener('click', function() {
+        window.location.href = '{{ url_for("index") }}';
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,689 @@
+{% extends "base.html" %}
+
+{% set title = "Joueur vs IA Aléatoire - Puissance 4" %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/game_styles.css') }}">
+<style>
+    .game-container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    .game-board {
+        background-color: #1a1a2e;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+    .column-headers {
+        display: flex;
+        justify-content: space-around;
+        margin-bottom: 10px;
+    }
+    .column-header {
+        width: 60px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        border-radius: 5px;
+        transition: all 0.2s;
+    }
+    .column-header:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+    .column-header:active {
+        transform: scale(0.95);
+    }
+    .board {
+        display: flex;
+        flex-direction: column;
+    }
+    .row {
+        display: flex;
+        justify-content: space-around;
+        margin-bottom: 5px;
+    }
+    .cell {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background-color: #3a3a4e;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s;
+    }
+    .cell.player-1 {
+        background-color: #ff0000;
+        box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+    }
+    .cell.player-2 {
+        background-color: #ffcc00;
+        box-shadow: 0 0 10px rgba(255, 204, 0, 0.5);
+    }
+    .winning-cell {
+        animation: winning-pulse 1.5s infinite;
+        transform: scale(1.05);
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.7);
+    }
+    .last-move {
+        animation: pulse 0.5s ease;
+        box-shadow: 0 0 10px rgba(255, 255, 0, 0.7);
+    }
+    .token-fall {
+        animation: token-fall 0.5s ease-out;
+    }
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+    }
+    @keyframes winning-pulse {
+        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); }
+        50% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(255, 215, 0, 0.5); }
+        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+    }
+    @keyframes token-fall {
+        0% { transform: translateY(-100px); opacity: 0; }
+        100% { transform: translateY(0); opacity: 1; }
+    }
+    .game-over-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+    .game-over-content {
+        background-color: white;
+        padding: 30px;
+        border-radius: 10px;
+        text-align: center;
+        max-width: 500px;
+        width: 90%;
+    }
+    .game-over-content h2 {
+        color: #333;
+        margin-bottom: 20px;
+    }
+    .game-over-content p {
+        margin-bottom: 20px;
+        font-size: 1.1em;
+    }
+    .game-over-buttons {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+    }
+    .game-history {
+        background-color: #1a1a2e;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        height: 100%;
+    }
+    .history-header {
+        color: white;
+        margin-bottom: 15px;
+        font-size: 1.2em;
+        text-align: center;
+    }
+    .history-list {
+        max-height: 450px;
+        overflow-y: auto;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .history-item {
+        background-color: rgba(255, 255, 255, 0.05);
+        margin-bottom: 8px;
+        padding: 10px;
+        border-radius: 5px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: all 0.2s;
+    }
+    .history-item:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+    .history-item.last-move {
+        background-color: rgba(255, 255, 255, 0.15);
+        border-left: 3px solid #ffcc00;
+    }
+    .player-badge {
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-weight: bold;
+        font-size: 0.9em;
+    }
+    .player-badge.red {
+        background-color: #ff0000;
+        color: white;
+    }
+    .player-badge.yellow {
+        background-color: #ffcc00;
+        color: #333;
+    }
+    .move-info {
+        color: white;
+        font-size: 0.95em;
+    }
+    .move-number {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.9em;
+    }
+    .ai-thinking {
+        color: #ffcc00;
+        font-style: italic;
+        margin-top: 10px;
+        text-align: center;
+        display: none;
+    }
+    .game-controls {
+        margin-top: 20px;
+    }
+    .error-message {
+        color: #ff6b6b;
+        text-align: center;
+        margin: 10px 0;
+        font-weight: bold;
+        display: none;
+    }
+    .loading-indicator {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid rgba(255,255,255,.3);
+        border-radius: 50%;
+        border-top-color: #fff;
+        animation: spin 1s ease-in-out infinite;
+        margin-left: 10px;
+    }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="game-container">
+    <h1 class="text-center mb-4">
+        Mode Joueur vs IA Aléatoire
+        <span class="badge bg-secondary">Aléatoire</span>
+    </h1>
+
+    <div class="error-message" id="error-message"></div>
+
+    <div class="row">
+        <!-- Plateau de jeu (colonne principale) -->
+        <div class="col-lg-8">
+            <div class="game-info mb-3">
+                <div class="player-turn">
+                    <span class="player-indicator {% if game_state.current_player == 1 %}red{% else %}yellow{% endif %}"></span>
+                    <span id="current-player-text">
+                        {% if game_state.current_player == 1 %}
+                            Votre tour
+                        {% else %}
+                            Tour de l'IA
+                        {% endif %}
+                    </span>
+                </div>
+                <div id="ai-thinking-indicator" class="ai-thinking">
+                    L'IA est en train de réfléchir...
+                    <span class="loading-indicator"></span>
+                </div>
+            </div>
+
+            <div class="game-board">
+                <div class="column-headers">
+                    {% for col in range(BOARD_COLS) %}
+                    <div class="column-header" data-col="{{ col }}">
+                        <span class="column-number">{{ col+1 }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="board">
+                    {% for row in range(BOARD_ROWS) %}
+                    <div class="row">
+                        {% for col in range(BOARD_COLS) %}
+                        <div class="cell
+                            {% if game_state.board[row][col] == 1 %}player-1
+                            {% elif game_state.board[row][col] == 2 %}player-2
+                            {% else %}empty-cell{% endif %}
+                            {% if game_state.winning_cells and [row, col] in game_state.winning_cells %} winning-cell{% endif %}
+                            {% if game_state.last_move and game_state.last_move[0] == row and game_state.last_move[1] == col %} last-move token-fall{% endif %}"
+                             data-row="{{ row }}" data-col="{{ col }}">
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="game-controls mt-4 d-flex justify-content-center gap-3">
+                <button id="undo-btn" class="btn btn-warning" {% if not game_state.move_history %}disabled{% endif %}>
+                    <i class="fas fa-undo me-2"></i>Annuler
+                </button>
+                <a href="{{ url_for('save_game') }}" class="btn btn-success">
+                    <i class="fas fa-save me-2"></i>Sauvegarder
+                </a>
+                <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                    <i class="fas fa-home me-2"></i>Accueil
+                </a>
+            </div>
+        </div>
+
+        <!-- Historique des coups (colonne secondaire) -->
+        <div class="col-lg-4">
+            <div class="game-history">
+                <div class="history-header">Historique des coups</div>
+                <ol class="history-list">
+                    {% if game_state.move_history %}
+                        {% for move in game_state.move_history %}
+                        <li class="history-item {% if loop.last and not game_state.game_over %}last-move{% endif %}">
+                            <span class="player-badge {% if move[2] == 1 %}red{% else %}yellow{% endif %}">
+                                {{ 'Vous' if move[2] == 1 else 'IA' }}
+                            </span>
+                            <span class="move-info">
+                                Col {{ move[1]+1 }}, L{{ BOARD_ROWS - move[0] }}
+                            </span>
+                            <span class="move-number">Coup {{ loop.index }}</span>
+                        </li>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center text-muted p-3">Aucun coup joué</div>
+                    {% endif %}
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlay de fin de partie -->
+    <div id="game-over-overlay" class="game-over-overlay" style="display: {% if game_state.game_over %}flex{% else %}none{% endif %};">
+        <div class="game-over-content">
+            <h2 id="game-over-title">
+                {% if game_state.winner == 0 %}
+                    Match nul!
+                {% elif game_state.winner == 1 %}
+                    Vous avez gagné!
+                {% elif game_state.winner == 2 %}
+                    L'IA a gagné!
+                {% endif %}
+            </h2>
+            <p id="game-over-message">
+                {% if game_state.winner == 0 %}
+                    La partie s'est terminée sur un match nul.
+                {% elif game_state.winner == 1 %}
+                    Félicitations! Vous avez battu l'IA!
+                {% elif game_state.winner == 2 %}
+                    L'IA a remporté cette partie.
+                {% endif %}
+            </p>
+            <div class="game-over-buttons">
+                <button id="replay-overlay-btn" class="btn btn-primary">
+                    <i class="fas fa-redo me-2"></i>Recommencer
+                </button>
+                <button id="home-overlay-btn" class="btn btn-secondary">
+                    <i class="fas fa-home me-2"></i>Accueil
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Constantes JavaScript -->
+<script>
+const BOARD_ROWS = {{ BOARD_ROWS|safe }};
+const BOARD_COLS = {{ BOARD_COLS|safe }};
+const ROUGE = {{ ROUGE|safe }};
+const JAUNE = {{ JAUNE|safe }};
+const EMPTY = 0;
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ROUGE = 1;
+    const JAUNE = 2;
+    let isProcessing = false;
+    let gameOver = {{ game_state.game_over|tojson|safe }};
+    let currentPlayer = {{ game_state.current_player }};
+
+    // Désactiver les colonnes si la partie est terminée
+    if (gameOver) {
+        document.querySelectorAll('.column-header').forEach(header => {
+            header.style.pointerEvents = 'none';
+            header.style.opacity = '0.5';
+        });
+    }
+
+    function showError(message) {
+        const errorElement = document.getElementById('error-message');
+        errorElement.textContent = message;
+        errorElement.style.display = 'block';
+
+        setTimeout(() => {
+            errorElement.style.display = 'none';
+        }, 3000);
+    }
+
+    // Gestion des clics sur les colonnes
+    document.querySelectorAll('.column-header').forEach(header => {
+        header.addEventListener('click', function() {
+            if (isProcessing || gameOver || currentPlayer !== ROUGE) return;
+            const col = parseInt(this.getAttribute('data-col'));
+            makeMove(col);
+        });
+    });
+
+    // Gestion des touches clavier
+    document.addEventListener('keydown', function(e) {
+        if (isProcessing || gameOver || currentPlayer !== ROUGE) return;
+
+        if (e.key >= '1' && e.key <= '{{ BOARD_COLS }}') {
+            const col = parseInt(e.key) - 1;
+            makeMove(col);
+        }
+    });
+
+    function makeMove(column) {
+        if (isProcessing || gameOver || currentPlayer !== ROUGE) return;
+        isProcessing = true;
+
+        fetch('/play', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `column=${column}`
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erreur serveur: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                showError(data.error);
+                isProcessing = false;
+                return;
+            }
+
+            updateBoard(data.board);
+
+            if (data.last_move) {
+                const [row, col] = data.last_move;
+                const player = data.board[row][col];
+                animateTokenDrop(row, col, player);
+                updateMoveHistory(data.move_history);
+            }
+
+            if (data.game_over) {
+                gameOver = true;
+                document.querySelectorAll('.column-header').forEach(header => {
+                    header.style.pointerEvents = 'none';
+                    header.style.opacity = '0.5';
+                });
+
+                if (data.winning_cells) {
+                    highlightWinningCells(data.winning_cells);
+                }
+
+                showGameOver(
+                    data.winner === "Nul" ? "Nul" :
+                    data.winner === 1 ? "Rouge" : "Jaune"
+                );
+            } else {
+                // Mettre à jour le joueur courant
+                currentPlayer = data.current_player;
+                updateCurrentPlayer(currentPlayer);
+
+                // Si c'est au tour de l'IA, la faire jouer après un délai
+                if (currentPlayer === JAUNE) {
+                    showAITinking(true);
+                    setTimeout(() => {
+                        playAI();
+                    }, 1000);
+                }
+            }
+
+            isProcessing = false;
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            showError(`Une erreur est survenue: ${error.message}`);
+            isProcessing = false;
+        });
+    }
+
+    function playAI() {
+        if (isProcessing || gameOver || currentPlayer !== JAUNE) return;
+        isProcessing = true;
+        showAITinking(true);
+
+        fetch('/play', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'column=-1'  // -1 indique que c'est le tour de l'IA
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erreur serveur: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            showAITinking(false);
+
+            if (data.error) {
+                showError(`Erreur IA: ${data.error}`);
+                isProcessing = false;
+                return;
+            }
+
+            updateBoard(data.board);
+
+            if (data.last_move) {
+                const [row, col] = data.last_move;
+                const player = data.board[row][col];
+                animateTokenDrop(row, col, player);
+                updateMoveHistory(data.move_history);
+            }
+
+            if (data.game_over) {
+                gameOver = true;
+                document.querySelectorAll('.column-header').forEach(header => {
+                    header.style.pointerEvents = 'none';
+                    header.style.opacity = '0.5';
+                });
+
+                if (data.winning_cells) {
+                    highlightWinningCells(data.winning_cells);
+                }
+
+                showGameOver(
+                    data.winner === "Nul" ? "Nul" :
+                    data.winner === 1 ? "Rouge" : "Jaune"
+                );
+            } else {
+                // Mettre à jour le joueur courant
+                currentPlayer = data.current_player;
+                updateCurrentPlayer(currentPlayer);
+            }
+
+            isProcessing = false;
+        })
+        .catch(error => {
+            console.error('Erreur IA:', error);
+            showAITinking(false);
+            showError(`Erreur avec l'IA: ${error.message}`);
+            isProcessing = false;
+        });
+    }
+
+    function updateBoard(boardData) {
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach(cell => {
+            const row = parseInt(cell.getAttribute('data-row'));
+            const col = parseInt(cell.getAttribute('data-col'));
+            const value = boardData[row][col];
+
+            const hasWinning = cell.classList.contains('winning-cell');
+            const hasLastMove = cell.classList.contains('last-move');
+
+            cell.className = 'cell empty-cell';
+            if (value === ROUGE) cell.classList.add('player-1');
+            else if (value === JAUNE) cell.classList.add('player-2');
+
+            if (hasWinning) cell.classList.add('winning-cell');
+            if (hasLastMove) cell.classList.add('last-move');
+        });
+    }
+
+    function updateMoveHistory(moveHistory) {
+        const historyList = document.querySelector('.history-list');
+        if (!historyList) return;
+
+        historyList.innerHTML = '';
+
+        if (!moveHistory || moveHistory.length === 0) {
+            historyList.innerHTML = '<div class="text-center text-muted p-3">Aucun coup joué</div>';
+            return;
+        }
+
+        moveHistory.forEach((move, index) => {
+            const item = document.createElement('li');
+            item.className = 'history-item';
+            if (index === moveHistory.length - 1 && !gameOver) {
+                item.classList.add('last-move');
+            }
+
+            const playerClass = move[2] === ROUGE ? 'red' : 'yellow';
+            const playerText = move[2] === ROUGE ? 'Vous' : 'IA';
+
+            item.innerHTML = `
+                <span class="player-badge ${playerClass}">${playerText}</span>
+                <span class="move-info">Col ${move[1]+1}, L${BOARD_ROWS - move[0]}</span>
+                <span class="move-number">Coup ${index + 1}</span>
+            `;
+
+            historyList.appendChild(item);
+        });
+    }
+
+    function animateTokenDrop(row, col, player) {
+        const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+        if (cell) {
+            const hasWinning = cell.classList.contains('winning-cell');
+            cell.className = 'cell empty-cell';
+            if (hasWinning) cell.classList.add('winning-cell');
+
+            cell.classList.add(`player-${player}`);
+            cell.classList.add('token-fall');
+            cell.classList.add('last-move');
+
+            setTimeout(() => {
+                cell.classList.remove('token-fall');
+            }, 500);
+        }
+    }
+
+    function updateCurrentPlayer(player) {
+        const indicator = document.querySelector('.player-indicator');
+        const text = document.querySelector('#current-player-text');
+
+        if (indicator) {
+            indicator.className = 'player-indicator';
+            indicator.classList.add(player === ROUGE ? 'red' : 'yellow');
+        }
+
+        if (text) {
+            text.textContent = `Tour: ${player === ROUGE ? 'Votre tour' : 'Tour de l\'IA'}`;
+        }
+    }
+
+    function highlightWinningCells(winningCells) {
+        winningCells.forEach(([row, col]) => {
+            const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+            if (cell) cell.classList.add('winning-cell');
+        });
+    }
+
+    function showGameOver(winner) {
+        const overlay = document.getElementById('game-over-overlay');
+        const title = document.getElementById('game-over-title');
+        const message = document.getElementById('game-over-message');
+
+        if (winner === "Nul") {
+            title.textContent = "Match nul!";
+            message.textContent = "La partie s'est terminée sur un match nul.";
+        } else if (winner === "Rouge") {
+            title.textContent = "Vous avez gagné!";
+            message.textContent = "Félicitations! Vous avez battu l'IA!";
+        } else {
+            title.textContent = "L'IA a gagné!";
+            message.textContent = "L'IA a remporté cette partie.";
+        }
+
+        overlay.style.display = 'flex';
+    }
+
+    function showAITinking(show) {
+        const indicator = document.getElementById('ai-thinking-indicator');
+        if (indicator) {
+            indicator.style.display = show ? 'block' : 'none';
+        }
+    }
+
+    // Bouton Annuler
+    document.getElementById('undo-btn').addEventListener('click', function() {
+        if (isProcessing) return;
+
+        fetch('/undo', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'}
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erreur serveur: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                showError(data.error);
+                return;
+            }
+            window.location.reload();
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            showError(`Erreur lors de l'annulation: ${error.message}`);
+        });
+    });
+
+    // Boutons de l'overlay
+    document.getElementById('replay-overlay-btn').addEventListener('click', function() {
+        window.location.href = '{{ url_for("start_game", mode=1, ai_type="random") }}';
+    });
+
+    document.getElementById('home-overlay-btn').addEventListener('click', function() {
+        window.location.href = '{{ url_for("index") }}';
+    });
+
+    // Initialiser l'affichage du joueur courant
+    updateCurrentPlayer(currentPlayer);
+});
+</script>
+{% endblock %}

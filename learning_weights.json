@@ -1,0 +1,9 @@
+{
+  "center_weight": 1.0,
+  "three_in_row_weight": 3.0874722222222224,
+  "two_in_row_weight": 1.0,
+  "opponent_three_weight": -3.8065277777777777,
+  "depth": 3.9999999999999996,
+  "learning_rate": 0.09801,
+  "exploration_rate": 0.2
+}

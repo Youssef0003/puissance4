@@ -1,0 +1,5 @@
+Flask==3.0.0
+Flask-Session==0.5.0
+psycopg2-binary==2.9.9
+undetected-chromedriver==3.5.3
+selenium==4.15.0

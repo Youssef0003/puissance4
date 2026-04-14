@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration Minimax{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="text-center mb-4">Configuration de l'IA Minimax</h1>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Paramètres actuels <small class="text-muted fs-6">(minimax_config.json)</small></h5>
+
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Paramètre</th>
+                            <th>Valeur</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Poids du centre</td>
+                            <td>{{ "%.2f"|format(weights.center_weight) }}</td>
+                            <td>Importance de contrôler les colonnes centrales</td>
+                        </tr>
+                        <tr>
+                            <td>Alignements de 3</td>
+                            <td>{{ "%.2f"|format(weights.three_in_row_weight) }}</td>
+                            <td>Score attribué à 3 pions alignés</td>
+                        </tr>
+                        <tr>
+                            <td>Alignements de 2</td>
+                            <td>{{ "%.2f"|format(weights.two_in_row_weight) }}</td>
+                            <td>Score attribué à 2 pions alignés</td>
+                        </tr>
+                        <tr>
+                            <td>Alignements adverses (3)</td>
+                            <td>{{ "%.2f"|format(weights.opponent_three_weight) }}</td>
+                            <td>Pénalité quand l'adversaire a 3 pions alignés</td>
+                        </tr>
+                        <tr>
+                            <td>Profondeur Minimax</td>
+                            <td>{{ weights.depth }}</td>
+                            <td>Nombre de coups anticipés par l'algorithme</td>
+                        </tr>
+                        <tr>
+                            <td>Taux d'apprentissage</td>
+                            <td>{{ "%.3f"|format(weights.learning_rate) }}</td>
+                            <td>Non utilisé activement</td>
+                        </tr>
+                        <tr>
+                            <td>Taux d'exploration</td>
+                            <td>{{ "%.2f"|format(weights.exploration_rate) }}</td>
+                            <td>Non utilisé activement</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="d-grid gap-2 mt-4">
+                <a href="{{ url_for('reset_learning_weights') }}" class="btn btn-warning">
+                    <i class="bi bi-arrow-counterclockwise"></i> Réinitialiser la configuration
+                </a>
+                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Retour à l'accueil
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,729 @@
+{% extends "base.html" %}
+
+{% block title %}Créer un plateau personnalisé{% endblock %}
+
+{% block styles %}
+<style>
+    .board-editor {
+        max-width: 800px;
+        margin: 0 auto;
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .board-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .board {
+        display: flex;
+        flex-direction: column;
+        background-color: #1a1a2e;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        margin-bottom: 20px;
+    }
+    .row {
+        display: flex;
+    }
+    .cell {
+        width: 50px;
+        height: 50px;
+        margin: 2px;
+        border-radius: 50%;
+        background-color: #3a3a4e;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
+    }
+    .cell:hover {
+        transform: scale(1.05);
+    }
+    .cell.empty {
+        background-color: #3a3a4e;
+    }
+    .cell.player-1 {
+        background-color: #ff0000;
+        box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+    }
+    .cell.player-2 {
+        background-color: #ffcc00;
+        box-shadow: 0 0 10px rgba(255, 204, 0, 0.5);
+    }
+    .cell.invalid {
+        background-color: #dc3545;
+        opacity: 0.7;
+        cursor: not-allowed;
+    }
+    .cell.invalid::after {
+        content: "❌";
+        position: absolute;
+        color: white;
+        font-size: 20px;
+    }
+    .controls {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    .current-player {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 20px;
+        justify-content: center;
+    }
+    .player-indicator {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    .player-indicator.red {
+        background-color: #ff0000;
+    }
+    .player-indicator.yellow {
+        background-color: #ffcc00;
+    }
+    .game-options {
+        background-color: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .column-labels {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 10px;
+    }
+    .column-label {
+        width: 50px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 2px;
+        font-weight: bold;
+        color: #333;
+    }
+    .validation-message {
+        text-align: center;
+        margin: 15px 0;
+        padding: 10px;
+        border-radius: 5px;
+    }
+    .validation-ok {
+        background-color: #d4edda;
+        color: #155724;
+        display: none;
+    }
+    .validation-error {
+        background-color: #f8d7da;
+        color: #721c24;
+        display: none;
+    }
+    .row-labels {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-right: 10px;
+    }
+    .row-label {
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 2px 0;
+        font-weight: bold;
+        color: #333;
+        width: 30px;
+    }
+    .board-wrapper {
+        display: flex;
+        align-items: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="text-center mb-4">Créer un plateau personnalisé</h1>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="board-editor">
+                <div class="alert alert-info mb-4">
+                    <strong>Instructions:</strong>
+                    <ul>
+                        <li>Cliquez sur une case pour placer un jeton (rouge ou jaune)</li>
+                        <li>Cliquez sur un jeton existant pour le retirer</li>
+                        <li>Respectez les règles du Puissance 4 (pas plus de 6 jetons par colonne)</li>
+                        <li>Vous ne pouvez pas avoir 4 jetons alignés de la même couleur</li>
+                    </ul>
+                </div>
+
+                <div class="validation-message validation-ok" id="validation-ok">
+                    ✅ Plateau valide
+                </div>
+                <div class="validation-message validation-error" id="validation-error">
+                    ❌ Erreur: <span id="error-message"></span>
+                </div>
+
+                <div class="current-player mb-3">
+                    <span>Joueur actuel:</span>
+                    <span class="player-indicator red" id="current-player-indicator"></span>
+                    <span id="current-player-text">ROUGE</span>
+                </div>
+
+                <div class="board-wrapper">
+                    <div class="row-labels">
+                        {% for row in range(9) %}
+                        <div class="row-label">{{ 9 - row }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div>
+                        <div class="column-labels">
+                            {% for col in range(9) %}
+                            <div class="column-label">{{ col+1 }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="board" id="game-board">
+                            {% for row in range(9) %}
+                            <div class="row">
+                                {% for col in range(9) %}
+                                <div class="cell empty" data-row="{{ row }}" data-col="{{ col }}"></div>
+                                {% endfor %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <button class="btn btn-outline-danger" id="clear-board">
+                        <i class="bi bi-trash"></i> Tout effacer
+                    </button>
+                    <button class="btn btn-outline-warning" id="undo-move" disabled>
+                        <i class="bi bi-arrow-counterclockwise"></i> Annuler
+                    </button>
+                    <button class="btn btn-outline-secondary" id="mirror-board">
+                        <i class="bi bi-arrows-expand"></i> Miroir horizontal
+                    </button>
+                    <button class="btn btn-outline-primary" id="validate-board">
+                        <i class="bi bi-check-circle"></i> Valider le plateau
+                    </button>
+                </div>
+
+                <div class="game-options card mt-3">
+                    <div class="card-body">
+                        <h5 class="card-title">Options de jeu</h5>
+
+                        <div class="mb-3">
+                            <label for="game-mode" class="form-label">Mode de jeu</label>
+                            <select class="form-select" id="game-mode">
+                                <option value="0">IA vs IA</option>
+                                <option value="1" selected>Joueur vs IA</option>
+                                <option value="2">Joueur vs Joueur</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3" id="ai-type-container">
+                            <label for="ai-type" class="form-label">Type d'IA (pour Joueur vs IA)</label>
+                            <select class="form-select" id="ai-type">
+                                <option value="random" selected>Aléatoire</option>
+                                <option value="minimax">Minimax</option>
+                            </select>
+                        </div>
+
+                        <div class="d-grid gap-2 mt-4">
+                            <button class="btn btn-primary btn-lg" id="save-board" disabled>
+                                <i class="bi bi-save"></i> Sauvegarder le plateau
+                            </button>
+                            <a href="{{ url_for('saved_games') }}" class="btn btn-outline-secondary btn-lg">
+                                <i class="bi bi-list"></i> Retour aux parties sauvegardées
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const board = document.getElementById('game-board');
+    const currentPlayerIndicator = document.getElementById('current-player-indicator');
+    const currentPlayerText = document.getElementById('current-player-text');
+    const clearBoardBtn = document.getElementById('clear-board');
+    const undoMoveBtn = document.getElementById('undo-move');
+    const mirrorBoardBtn = document.getElementById('mirror-board');
+    const validateBoardBtn = document.getElementById('validate-board');
+    const saveBoardBtn = document.getElementById('save-board');
+    const gameModeSelect = document.getElementById('game-mode');
+    const aiTypeContainer = document.getElementById('ai-type-container');
+    const validationOk = document.getElementById('validation-ok');
+    const validationError = document.getElementById('validation-error');
+    const errorMessage = document.getElementById('error-message');
+
+    let currentPlayer = 1; // 1 = ROUGE, 2 = JAUNE
+    let moveHistory = [];
+    let boardState = Array(9).fill().map(() => Array(9).fill(0));
+    let columnCounts = Array(9).fill(0);
+
+    // Gestion du changement de mode de jeu
+    gameModeSelect.addEventListener('change', function() {
+        if (this.value == 2) {
+            aiTypeContainer.style.display = 'none';
+        } else {
+            aiTypeContainer.style.display = 'block';
+        }
+    });
+
+    // Initialiser l'affichage du type d'IA
+    if (gameModeSelect.value == 2) {
+        aiTypeContainer.style.display = 'none';
+    }
+
+    // Fonction pour vérifier si un coup est valide
+    function isValidMove(row, col) {
+        // Vérifier que la colonne n'a pas plus de 6 jetons
+        let count = 0;
+        for (let r = 0; r < 9; r++) {
+            if (boardState[r][col] !== 0) count++;
+        }
+        return count < 6;
+    }
+
+    // Fonction pour vérifier si un plateau est valide (pas de 4 alignés)
+    function isBoardValid() {
+        // Vérifier les lignes
+        for (let row = 0; row < 9; row++) {
+            for (let col = 0; col < 6; col++) {
+                if (boardState[row][col] !== 0 &&
+                    boardState[row][col] === boardState[row][col+1] &&
+                    boardState[row][col] === boardState[row][col+2] &&
+                    boardState[row][col] === boardState[row][col+3]) {
+                    return false;
+                }
+            }
+        }
+
+        // Vérifier les colonnes
+        for (let col = 0; col < 9; col++) {
+            for (let row = 0; row < 6; row++) {
+                if (boardState[row][col] !== 0 &&
+                    boardState[row][col] === boardState[row+1][col] &&
+                    boardState[row][col] === boardState[row+2][col] &&
+                    boardState[row][col] === boardState[row+3][col]) {
+                    return false;
+                }
+            }
+        }
+
+        // Vérifier les diagonales (haut-gauche à bas-droite)
+        for (let row = 0; row < 6; row++) {
+            for (let col = 0; col < 6; col++) {
+                if (boardState[row][col] !== 0 &&
+                    boardState[row][col] === boardState[row+1][col+1] &&
+                    boardState[row][col] === boardState[row+2][col+2] &&
+                    boardState[row][col] === boardState[row+3][col+3]) {
+                    return false;
+                }
+            }
+        }
+
+        // Vérifier les diagonales (bas-gauche à haut-droite)
+        for (let row = 3; row < 9; row++) {
+            for (let col = 0; col < 6; col++) {
+                if (boardState[row][col] !== 0 &&
+                    boardState[row][col] === boardState[row-1][col+1] &&
+                    boardState[row][col] === boardState[row-2][col+2] &&
+                    boardState[row][col] === boardState[row-3][col+3]) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    // Fonction pour marquer les cases invalides
+    function markInvalidMoves() {
+        // Réinitialiser tous les marqueurs d'invalidité
+        document.querySelectorAll('.cell').forEach(cell => {
+            cell.classList.remove('invalid');
+        });
+
+        // Vérifier les colonnes pleines
+        for (let col = 0; col < 9; col++) {
+            let count = 0;
+            for (let row = 0; row < 9; row++) {
+                if (boardState[row][col] !== 0) count++;
+            }
+            if (count >= 6) {
+                for (let row = 0; row < 9; row++) {
+                    if (boardState[row][col] === 0) {
+                        const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+                        if (cell) cell.classList.add('invalid');
+                    }
+                }
+            }
+        }
+
+        // Vérifier les alignements de 3 qui pourraient créer un 4 alignés
+        for (let row = 0; row < 9; row++) {
+            for (let col = 0; col < 9; col++) {
+                if (boardState[row][col] === 0) {
+                    const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+
+                    // Vérifier horizontalement
+                    if (col <= 5) {
+                        if (boardState[row][col+1] !== 0 &&
+                            boardState[row][col+1] === boardState[row][col+2] &&
+                            boardState[row][col+1] === boardState[row][col+3]) {
+                            cell.classList.add('invalid');
+                            continue;
+                        }
+                    }
+
+                    // Vérifier verticalement
+                    if (row >= 3) {
+                        if (boardState[row-1][col] !== 0 &&
+                            boardState[row-1][col] === boardState[row-2][col] &&
+                            boardState[row-1][col] === boardState[row-3][col]) {
+                            cell.classList.add('invalid');
+                            continue;
+                        }
+                    }
+
+                    // Vérifier diagonalement (haut-gauche à bas-droite)
+                    if (row >= 3 && col <= 5) {
+                        if (boardState[row-1][col+1] !== 0 &&
+                            boardState[row-1][col+1] === boardState[row-2][col+2] &&
+                            boardState[row-1][col+1] === boardState[row-3][col+3]) {
+                            cell.classList.add('invalid');
+                            continue;
+                        }
+                    }
+
+                    // Vérifier diagonalement (bas-gauche à haut-droite)
+                    if (row <= 5 && col <= 5) {
+                        if (boardState[row+1][col+1] !== 0 &&
+                            boardState[row+1][col+1] === boardState[row+2][col+2] &&
+                            boardState[row+1][col+1] === boardState[row+3][col+3]) {
+                            cell.classList.add('invalid');
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Gestion des clics sur les cellules
+    board.querySelectorAll('.cell').forEach(cell => {
+        cell.addEventListener('click', function() {
+            const row = parseInt(this.getAttribute('data-row'));
+            const col = parseInt(this.getAttribute('data-col'));
+
+            // Vérifier si la cellule est invalide
+            if (this.classList.contains('invalid')) {
+                errorMessage.textContent = "Ce coup créerait un alignement de 4 ou la colonne est pleine";
+                validationError.style.display = 'block';
+                validationOk.style.display = 'none';
+                return;
+            }
+
+            // Vérifier si la colonne a déjà 6 jetons
+            let columnCount = 0;
+            for (let r = 0; r < 9; r++) {
+                if (boardState[r][col] !== 0) columnCount++;
+            }
+            if (columnCount >= 6) {
+                errorMessage.textContent = "La colonne est déjà pleine (max 6 jetons)";
+                validationError.style.display = 'block';
+                validationOk.style.display = 'none';
+                return;
+            }
+
+            // Vérifier si la cellule est vide
+            if (this.classList.contains('empty')) {
+                // Placer le jeton
+                this.classList.remove('empty');
+                this.classList.add(`player-${currentPlayer}`);
+
+                // Mettre à jour l'état du plateau
+                boardState[row][col] = currentPlayer;
+                moveHistory.push({row, col, player: currentPlayer});
+
+                // Mettre à jour le compteur de colonne
+                columnCounts[col]++;
+
+                // Vérifier si le plateau est toujours valide
+                if (!isBoardValid()) {
+                    // Annuler le dernier coup
+                    this.classList.remove(`player-${currentPlayer}`);
+                    this.classList.add('empty');
+                    boardState[row][col] = 0;
+                    moveHistory.pop();
+                    columnCounts[col]--;
+
+                    errorMessage.textContent = "Ce coup créerait un alignement de 4 jetons de la même couleur";
+                    validationError.style.display = 'block';
+                    validationOk.style.display = 'none';
+                    return;
+                }
+
+                // Changer de joueur
+                currentPlayer = currentPlayer === 1 ? 2 : 1;
+                updateCurrentPlayerIndicator();
+
+                // Activer le bouton Annuler
+                undoMoveBtn.disabled = false;
+
+                // Désactiver le bouton Sauvegarder
+                saveBoardBtn.disabled = true;
+            } else {
+                // Si la cellule n'est pas vide, la vider
+                this.classList.add('empty');
+                this.classList.remove('player-1', 'player-2');
+
+                // Mettre à jour l'état du plateau
+                boardState[row][col] = 0;
+                columnCounts[col]--;
+
+                // Retirer le dernier coup de l'historique
+                moveHistory = moveHistory.filter(move => !(move.row === row && move.col === col));
+
+                // Si l'historique est vide, désactiver le bouton Annuler
+                if (moveHistory.length === 0) {
+                    undoMoveBtn.disabled = true;
+                }
+
+                // Changer de joueur (le dernier qui a joué)
+                if (moveHistory.length > 0) {
+                    currentPlayer = moveHistory[moveHistory.length - 1].player === 1 ? 2 : 1;
+                } else {
+                    currentPlayer = 1;
+                }
+                updateCurrentPlayerIndicator();
+            }
+
+            // Mettre à jour les marqueurs d'invalidité
+            markInvalidMoves();
+        });
+    });
+
+    // Bouton pour tout effacer
+    clearBoardBtn.addEventListener('click', function() {
+        if (confirm('Voulez-vous vraiment effacer tout le plateau?')) {
+            board.querySelectorAll('.cell').forEach(cell => {
+                cell.classList.remove('player-1', 'player-2', 'invalid');
+                cell.classList.add('empty');
+            });
+
+            // Réinitialiser l'état
+            boardState = Array(9).fill().map(() => Array(9).fill(0));
+            moveHistory = [];
+            columnCounts = Array(9).fill(0);
+            currentPlayer = 1;
+            updateCurrentPlayerIndicator();
+            undoMoveBtn.disabled = true;
+            saveBoardBtn.disabled = true;
+            validationError.style.display = 'none';
+            validationOk.style.display = 'none';
+        }
+    });
+
+    // Bouton pour annuler le dernier coup
+    undoMoveBtn.addEventListener('click', function() {
+        if (moveHistory.length > 0) {
+            const lastMove = moveHistory[moveHistory.length - 1];
+            const cell = document.querySelector(`.cell[data-row="${lastMove.row}"][data-col="${lastMove.col}"]`);
+
+            if (cell) {
+                cell.classList.remove('player-1', 'player-2');
+                cell.classList.add('empty');
+                boardState[lastMove.row][lastMove.col] = 0;
+                columnCounts[lastMove.col]--;
+
+                // Retirer le dernier coup
+                moveHistory.pop();
+
+                // Changer de joueur
+                if (moveHistory.length > 0) {
+                    currentPlayer = moveHistory[moveHistory.length - 1].player === 1 ? 2 : 1;
+                } else {
+                    currentPlayer = 1;
+                }
+                updateCurrentPlayerIndicator();
+
+                // Désactiver le bouton si plus de coups
+                if (moveHistory.length === 0) {
+                    this.disabled = true;
+                }
+
+                // Mettre à jour les marqueurs d'invalidité
+                markInvalidMoves();
+
+                // Désactiver le bouton Sauvegarder
+                saveBoardBtn.disabled = true;
+                validationOk.style.display = 'none';
+            }
+        }
+    });
+
+    // Bouton pour miroir horizontal
+    mirrorBoardBtn.addEventListener('click', function() {
+        if (confirm('Voulez-vous vraiment miroir le plateau horizontalement?')) {
+            // Créer un nouveau plateau miroir
+            const mirroredBoard = Array(9).fill().map(() => Array(9).fill(0));
+            const newMoveHistory = [];
+
+            // Copier et miroir les jetons
+            for (let row = 0; row < 9; row++) {
+                for (let col = 0; col < 9; col++) {
+                    const originalCol = 8 - col; // Miroir horizontal
+                    mirroredBoard[row][col] = boardState[row][originalCol];
+
+                    if (boardState[row][originalCol] !== 0) {
+                        newMoveHistory.push({
+                            row: row,
+                            col: col,
+                            player: boardState[row][originalCol]
+                        });
+                    }
+
+                    // Mettre à jour l'affichage
+                    const originalCell = document.querySelector(`.cell[data-row="${row}"][data-col="${originalCol}"]`);
+                    const mirroredCell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+
+                    if (originalCell && mirroredCell) {
+                        mirroredCell.className = 'cell';
+                        mirroredCell.classList.add(originalCell.classList.contains('player-1') ? 'player-1' :
+                                             originalCell.classList.contains('player-2') ? 'player-2' : 'empty');
+                    }
+                }
+            }
+
+            // Mettre à jour l'état
+            boardState = mirroredBoard;
+            moveHistory = newMoveHistory;
+
+            // Mettre à jour le joueur courant
+            if (moveHistory.length > 0) {
+                currentPlayer = moveHistory[moveHistory.length - 1].player === 1 ? 2 : 1;
+            } else {
+                currentPlayer = 1;
+            }
+
+            updateCurrentPlayerIndicator();
+            undoMoveBtn.disabled = moveHistory.length === 0;
+            saveBoardBtn.disabled = true;
+            validationOk.style.display = 'none';
+
+            // Mettre à jour les marqueurs d'invalidité
+            markInvalidMoves();
+        }
+    });
+
+    // Bouton pour valider le plateau
+    validateBoardBtn.addEventListener('click', function() {
+        if (moveHistory.length === 0) {
+            errorMessage.textContent = "Le plateau est vide";
+            validationError.style.display = 'block';
+            validationOk.style.display = 'none';
+            saveBoardBtn.disabled = true;
+            return;
+        }
+
+        if (!isBoardValid()) {
+            errorMessage.textContent = "Le plateau contient un alignement de 4 jetons de la même couleur";
+            validationError.style.display = 'block';
+            validationOk.style.display = 'none';
+            saveBoardBtn.disabled = true;
+            return;
+        }
+
+        // Vérifier qu'il y a au moins un jeton
+        let hasPieces = false;
+        for (let row = 0; row < 9; row++) {
+            for (let col = 0; col < 9; col++) {
+                if (boardState[row][col] !== 0) {
+                    hasPieces = true;
+                    break;
+                }
+            }
+            if (hasPieces) break;
+        }
+
+        if (!hasPieces) {
+            errorMessage.textContent = "Le plateau est vide";
+            validationError.style.display = 'block';
+            validationOk.style.display = 'none';
+            saveBoardBtn.disabled = true;
+            return;
+        }
+
+        // Tout est valide
+        validationError.style.display = 'none';
+        validationOk.style.display = 'block';
+        saveBoardBtn.disabled = false;
+    });
+
+    // Bouton pour sauvegarder le plateau
+    saveBoardBtn.addEventListener('click', function() {
+        const gameMode = parseInt(gameModeSelect.value);
+        const aiType = gameMode !== 2 ? document.getElementById('ai-type').value : null;
+
+        fetch('/save_custom_board', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                board: boardState,
+                mode: gameMode,
+                ai_type: aiType
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert(data.message);
+                window.location.href = `/load_game/${data.game_id}`;
+            } else {
+                alert(data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            alert('Une erreur est survenue lors de la sauvegarde');
+        });
+    });
+
+    // Mise à jour de l'indicateur de joueur courant
+    function updateCurrentPlayerIndicator() {
+        currentPlayerIndicator.className = 'player-indicator';
+        currentPlayerIndicator.classList.add(currentPlayer === 1 ? 'red' : 'yellow');
+        currentPlayerText.textContent = currentPlayer === 1 ? 'ROUGE' : 'JAUNE';
+    }
+
+    // Initialiser les marqueurs d'invalidité
+    markInvalidMoves();
+});
+</script>
+{% endblock %}
