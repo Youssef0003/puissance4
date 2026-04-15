@@ -3,169 +3,70 @@
 {% block title %}Importer une partie{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
-    <h2 class="mb-4">Importer une partie</h2>
+<div class="container mt-5" style="max-width: 650px;">
+    <h2 class="mb-4 text-center">Importer une partie</h2>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                <div class="alert alert-{{ category }} alert-dismissible fade show">
                     {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             {% endfor %}
         {% endif %}
     {% endwith %}
 
+    <!-- Option 1 : Fichier -->
     <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Importer un fichier .txt</h5>
+        </div>
         <div class="card-body">
-            <h5 class="card-title">1. Importer depuis un fichier texte</h5>
-            <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+            <form method="POST" enctype="multipart/form-data">
                 <div class="mb-3">
-                    <label for="game_file" class="form-label">Fichier texte (.txt)</label>
-                    <input class="form-control" type="file" id="game_file" name="game_file" accept=".txt" required>
-                    <div class="invalid-feedback">
-                        Veuillez sélectionner un fichier texte (.txt)
-                    </div>
+                    <input class="form-control" type="file" name="game_file" accept=".txt">
                     <div class="form-text">
-                        Format attendu : "4 5 6 7 6 5 4" (chaque nombre 1-9 représente une colonne)
+                        Fichier contenant une séquence de nombres <strong>1 à 9</strong> séparés par des espaces.<br>
+                        Exemple : <code>4 5 6 7 6 5 4</code>
                     </div>
                 </div>
-
-                <div class="mb-3">
-                    <label for="mode" class="form-label">Mode de jeu</label>
-                    <select class="form-select" id="mode" name="mode" required>
-                        <option value="0">IA vs IA</option>
-                        <option value="1" selected>Joueur vs IA</option>
-                        <option value="2">Joueur vs Joueur</option>
-                    </select>
-                </div>
-
                 <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-upload"></i> Importer le fichier
+                    <i class="bi bi-upload me-2"></i>Importer
                 </button>
             </form>
         </div>
     </div>
 
+    <!-- Option 2 : Séquence manuelle -->
     <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="bi bi-keyboard me-2"></i>Entrer une séquence manuellement</h5>
+        </div>
         <div class="card-body">
-            <h5 class="card-title">2. Ou entrer une séquence manuellement</h5>
             <form method="POST">
                 <div class="mb-3">
-                    <label for="game_sequence" class="form-label">Séquence de coups</label>
-                    <textarea class="form-control" id="game_sequence" name="game_sequence" rows="3"
-                              placeholder="Exemple: 4 5 6 7 6 5 4 3 4 5 6 7 8 9 8 7 6 5 4 3 4 5 6 7 8 9"></textarea>
+                    <textarea class="form-control" name="game_sequence" rows="3"
+                              placeholder="Exemple : 4 5 6 7 6 5 4 3 4 5"></textarea>
                     <div class="form-text">
-                        Chaque nombre (1-9) représente une colonne où placer un jeton.<br>
-                        Les jetons sont placés alternativement (Rouge, Jaune, Rouge, etc.)
+                        Chaque nombre <strong>1 à 9</strong> = une colonne.<br>
+                        Rouge commence toujours, les coups alternent Rouge / Jaune.
                     </div>
                 </div>
-
-                <div class="mb-3">
-                    <label for="mode2" class="form-label">Mode de jeu</label>
-                    <select class="form-select" id="mode2" name="mode" required>
-                        <option value="0">IA vs IA</option>
-                        <option value="1" selected>Joueur vs IA</option>
-                        <option value="2">Joueur vs Joueur</option>
-                    </select>
-                </div>
-
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-upload"></i> Importer la séquence
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-play-circle me-2"></i>Importer
                 </button>
             </form>
-        </div>
-    </div>
-
-    <div class="card mb-4">
-        <div class="card-body">
-            <h5 class="card-title">3. Exemples de formats valides</h5>
-
-            <div class="accordion" id="examplesAccordion">
-                <div class="accordion-item">
-                    <h2 class="accordion-header" id="headingOne">
-                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
-                            Partie courte (7 coups)
-                        </button>
-                    </h2>
-                    <div id="collapseOne" class="accordion-collapse collapse show" aria-labelledby="headingOne" data-bs-parent="#examplesAccordion">
-                        <div class="accordion-body">
-                            <pre>4 5 6 5 4 6 5</pre>
-                            <p>Cette séquence crée un plateau avec 7 jetons placés alternativement.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="accordion-item">
-                    <h2 class="accordion-header" id="headingTwo">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
-                            Partie complète (42 coups)
-                        </button>
-                    </h2>
-                    <div id="collapseTwo" class="accordion-collapse collapse" aria-labelledby="headingTwo" data-bs-parent="#examplesAccordion">
-                        <div class="accordion-body">
-                            <pre>1 2 3 4 5 6 7 8 9 1 2 3 4 5 6 7 8 9 1 2 3 4 5 6 7 8 9 1 2 3 4 5 6 7 8 9 1 2 3 4 5 6</pre>
-                            <p>Cette séquence remplit presque complètement le plateau.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="accordion-item">
-                    <h2 class="accordion-header" id="headingThree">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree" aria-expanded="false" aria-controls="collapseThree">
-                            Partie avec victoire
-                        </button>
-                    </h2>
-                    <div id="collapseThree" class="accordion-collapse collapse" aria-labelledby="headingThree" data-bs-parent="#examplesAccordion">
-                        <div class="accordion-body">
-                            <pre>4 5 6 7 6 5 4 5 6 7 6 5 4 5</pre>
-                            <p>Cette séquence crée une victoire horizontale au centre du plateau.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 
     <div class="alert alert-info">
-        <h5><i class="bi bi-info-circle"></i> Conseils</h5>
-        <ul>
-            <li>Les numéros doivent être compris entre 1 et 9 (inclus)</li>
-            <li>Les numéros doivent être séparés par des espaces</li>
-            <li>Chaque numéro représente une colonne où placer un jeton</li>
-            <li>Les jetons sont placés alternativement (Rouge, Jaune, Rouge, etc.)</li>
-            <li>Le premier jeton est toujours Rouge</li>
-        </ul>
+        <i class="bi bi-info-circle me-2"></i>
+        Après l'import, <strong>vous choisissez à chaque coup</strong> si c'est vous ou l'IA Minimax qui joue.
     </div>
 
-    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
-        <a href="{{ url_for('index') }}" class="btn btn-secondary me-md-2">
-            <i class="bi bi-arrow-left"></i> Retour à l'accueil
-        </a>
-    </div>
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left me-2"></i>Retour
+    </a>
 </div>
-
-<script>
-// Validation des formulaires
-(function () {
-  'use strict'
-
-  // Récupérer tous les formulaires auxquels nous voulons appliquer des styles de validation Bootstrap
-  var forms = document.querySelectorAll('.needs-validation')
-
-  // Boucler sur eux et prévenir la soumission
-  Array.prototype.slice.call(forms)
-    .forEach(function (form) {
-      form.addEventListener('submit', function (event) {
-        if (!form.checkValidity()) {
-          event.preventDefault()
-          event.stopPropagation()
-        }
-
-        form.classList.add('was-validated')
-      }, false)
-    })
-})()
-</script>
 {% endblock %}
