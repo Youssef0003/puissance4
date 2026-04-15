@@ -2934,9 +2934,9 @@ def play_imported():
             ai = AIPlayer(ai_type='minimax', depth=depth)
 
             # Priorites : gagner > bloquer > double menace > minimax
-            col = ai.check_immediate_win(board, current_player)
+            col = ai._win_col(board, current_player)
             if col is None:
-                col = ai.check_immediate_loss(board, current_player)
+                col = ai._win_col(board, opp if current_player == ROUGE else ROUGE)
             if col is None:
                 # Double menace
                 best_double = None
@@ -2946,7 +2946,7 @@ def play_imported():
                         r = get_next_open_row(board, c)
                         if r is not None:
                             board[r][c] = current_player
-                            wins = ai.count_winning_moves(board, current_player)
+                            wins = ai._count_threats(board, current_player)
                             board[r][c] = EMPTY
                             if wins >= 2 and wins > best_wins:
                                 best_wins = wins
