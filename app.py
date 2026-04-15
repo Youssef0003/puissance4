@@ -2936,7 +2936,8 @@ def play_imported():
             # Priorites : gagner > bloquer > double menace > minimax
             col = ai._win_col(board, current_player)
             if col is None:
-                col = ai._win_col(board, opp if current_player == ROUGE else ROUGE)
+                opponent = ROUGE if current_player == JAUNE else JAUNE
+                col = ai._win_col(board, opponent)
             if col is None:
                 # Double menace
                 best_double = None
