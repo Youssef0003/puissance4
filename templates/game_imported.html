@@ -1,0 +1,418 @@
+{% extends "base.html" %}
+{% block title %}Partie Importée - Puissance 4{% endblock %}
+
+{% block styles %}
+
+<!-- Modal d explication -->
+<div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-white border border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title text-warning" id="helpModalLabel">
+          🎮 Comment jouer — Partie Importée
+        </h5>
+      </div>
+      <div class="modal-body">
+        <p class="mb-3">La partie a été importée. <strong>À chaque coup vous choisissez qui joue.</strong></p>
+        <div class="d-flex align-items-start gap-3 mb-3 p-3 rounded" style="background:rgba(13,110,253,0.2);">
+          <span style="font-size:2em;">👤</span>
+          <div>
+            <strong class="text-primary">Bouton "Je joue"</strong><br>
+            <span class="text-white-50">Cliquez dessus puis cliquez sur le numéro de la colonne où vous voulez jouer.</span>
+          </div>
+        </div>
+        <div class="d-flex align-items-start gap-3 mb-3 p-3 rounded" style="background:rgba(255,193,7,0.15);">
+          <span style="font-size:2em;">🤖</span>
+          <div>
+            <strong class="text-warning">Bouton "L'IA joue"</strong><br>
+            <span class="text-white-50">L'IA Minimax calcule et joue automatiquement le meilleur coup.</span>
+          </div>
+        </div>
+        <div class="alert alert-secondary small mb-0">
+          💡 Les scores sous les colonnes indiquent ce que l'IA pense de chaque coup — la colonne en <strong class="text-warning">jaune</strong> est la meilleure selon l'IA.
+        </div>
+      </div>
+      <div class="modal-footer border-secondary justify-content-center">
+        <button type="button" class="btn btn-warning btn-lg px-5" data-bs-dismiss="modal">
+          C'est compris, on joue ! 🚀
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+    .game-board {
+        background-color: #1a1a2e;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    }
+    .board { display: flex; flex-direction: column; }
+    .row { display: flex; justify-content: space-around; margin-bottom: 5px; }
+    .cell {
+        width: 60px; height: 60px; border-radius: 50%;
+        background-color: #3a3a4e;
+        display: flex; align-items: center; justify-content: center;
+        transition: all 0.3s;
+    }
+    .cell.player-1 { background-color: #ff0000; box-shadow: 0 0 10px rgba(255,0,0,0.5); }
+    .cell.player-2 { background-color: #ffcc00; box-shadow: 0 0 10px rgba(255,204,0,0.5); }
+    .cell.winning-cell { animation: pulse 1s infinite; box-shadow: 0 0 15px rgba(255,215,0,0.8); }
+    .cell.last-move { box-shadow: 0 0 12px rgba(255,255,255,0.7); }
+    @keyframes pulse {
+        0%,100% { transform: scale(1); }
+        50% { transform: scale(1.08); }
+    }
+    .column-header {
+        width: 60px; height: 40px;
+        display: flex; align-items: center; justify-content: center;
+        color: white; font-weight: bold; cursor: pointer;
+        border-radius: 5px; transition: background 0.2s;
+    }
+    .column-header:hover { background: rgba(255,255,255,0.15); }
+    .column-headers { display: flex; justify-content: space-around; margin-bottom: 8px; }
+
+    /* Scores minimax */
+    .minimax-scores-row { display: flex; justify-content: space-around; margin-top: 8px; }
+    .score-badge {
+        width: 60px; height: 28px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 5px; color: white; font-size: 0.75em;
+        font-weight: bold; background: #4a4a6e;
+    }
+    .score-badge.highlight { background: #ffcc00; color: #1a1a2e; }
+    .score-badge.invalid { background: #2a2a3e; color: rgba(255,255,255,0.3); }
+
+    /* Panneau de choix */
+    .choice-panel {
+        background: #1a1a2e;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        color: white;
+        height: 100%;
+    }
+    .choice-panel h5 { color: #ffcc00; margin-bottom: 15px; text-align: center; }
+    .current-player-badge {
+        padding: 8px 16px; border-radius: 20px;
+        font-weight: bold; font-size: 1.1em;
+        display: inline-block; margin-bottom: 15px;
+    }
+    .history-list {
+        max-height: 300px; overflow-y: auto;
+        list-style: none; padding: 0; margin: 0;
+    }
+    .history-item {
+        background: rgba(255,255,255,0.05);
+        margin-bottom: 6px; padding: 8px;
+        border-radius: 5px; display: flex;
+        justify-content: space-between; font-size: 0.85em;
+    }
+    .badge-red { background: #ff0000; color: white; padding: 3px 8px; border-radius: 10px; }
+    .badge-yellow { background: #ffcc00; color: #333; padding: 3px 8px; border-radius: 10px; }
+    .col-btn {
+        width: 60px; height: 44px; font-weight: bold;
+        font-size: 0.9em; border-radius: 6px;
+    }
+    .col-buttons { display: flex; justify-content: space-around; margin-top: 8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <h4 class="text-center mb-3">
+        🎮 Partie Importée
+        <span class="badge bg-info ms-2">Mode Analyse</span>
+    </h4>
+
+    <div id="error-msg" class="alert alert-danger d-none mx-auto" style="max-width:600px;"></div>
+
+    {% if game_state.game_over %}
+    <div class="alert alert-success text-center mx-auto" style="max-width:500px;">
+        {% if game_state.winner == 0 %}Match nul !
+        {% elif game_state.winner == 1 %}🔴 Rouge gagne !
+        {% elif game_state.winner == 2 %}🟡 Jaune gagne !
+        {% endif %}
+        <a href="{{ url_for('import_game') }}" class="btn btn-sm btn-primary ms-3">Nouvelle importation</a>
+    </div>
+    {% endif %}
+
+    <div class="row justify-content-center g-3">
+        <!-- Plateau -->
+        <div class="col-auto">
+            <div class="game-board">
+                <div class="column-headers">
+                    {% for col in range(BOARD_COLS) %}
+                    <div class="column-header" data-col="{{ col }}">{{ col + 1 }}</div>
+                    {% endfor %}
+                </div>
+                <div class="board" id="board">
+                    {% for row in range(BOARD_ROWS) %}
+                    <div class="row">
+                        {% for col in range(BOARD_COLS) %}
+                        {% set is_winning = false %}
+                        {% for wc in game_state.winning_cells %}
+                            {% if wc[0] == row and wc[1] == col %}{% set is_winning = true %}{% endif %}
+                        {% endfor %}
+                        <div class="cell
+                            {% if game_state.board[row][col] == 1 %}player-1
+                            {% elif game_state.board[row][col] == 2 %}player-2{% endif %}
+                            {% if is_winning %} winning-cell{% endif %}
+                            {% if game_state.last_move and game_state.last_move[0] == row and game_state.last_move[1] == col %} last-move{% endif %}"
+                             data-row="{{ row }}" data-col="{{ col }}">
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Scores minimax -->
+                <div class="minimax-scores-row" id="minimax-scores">
+                    {% if game_state.minimax_scores %}
+                        {% for score in game_state.minimax_scores %}
+                        {% set is_best = loop.index0 == (game_state.minimax_scores | max_score_index) %}
+                        {% set invalid = score is none or score <= -999999 %}
+                        <div class="score-badge {% if invalid %}invalid{% elif is_best %}highlight{% endif %}">
+                            {% if invalid %}✕{% else %}{{ "%.0f"|format(score) }}{% endif %}
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+
+                <!-- Boutons colonne pour jouer manuellement -->
+                {% if not game_state.game_over %}
+                <div class="col-buttons mt-2" id="col-buttons">
+                    {% for col in range(BOARD_COLS) %}
+                    <button class="col-btn btn btn-outline-light btn-sm" data-col="{{ col }}"
+                            onclick="playerPlaysCol({{ col }})">
+                        {{ col + 1 }}
+                    </button>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Panneau de choix -->
+        <div class="col-md-4 col-lg-3">
+            <div class="choice-panel">
+                {% if not game_state.game_over %}
+                <h5>Qui joue ce coup ?</h5>
+
+                <!-- Joueur courant -->
+                <div class="text-center mb-3">
+                    <span class="current-player-badge bg-{{ 'danger' if game_state.current_player == 1 else 'warning text-dark' }}">
+                        {% if game_state.current_player == 1 %}🔴 Rouge{% else %}🟡 Jaune{% endif %}
+                    </span>
+                </div>
+
+                <!-- Boutons choix -->
+                <div class="d-grid gap-2 mb-4">
+                    <button id="btn-player" class="btn btn-primary btn-lg" onclick="choosePlayer()">
+                        👤 Je joue (clique sur une colonne)
+                    </button>
+                    <button id="btn-ai" class="btn btn-warning btn-lg text-dark" onclick="chooseAI()">
+                        🤖 L'IA joue
+                    </button>
+                </div>
+
+                <div id="player-hint" class="alert alert-info small d-none">
+                    Clique sur un numéro de colonne pour jouer.
+                </div>
+
+                {% else %}
+                <h5>Partie terminée</h5>
+                <div class="text-center mt-3">
+                    <a href="{{ url_for('import_game') }}" class="btn btn-primary">
+                        Nouvelle importation
+                    </a>
+                    <a href="{{ url_for('index') }}" class="btn btn-secondary mt-2">
+                        Accueil
+                    </a>
+                </div>
+                {% endif %}
+
+                <!-- Historique -->
+                <hr style="border-color:rgba(255,255,255,0.2);">
+                <div style="color:rgba(255,255,255,0.7); font-size:0.85em; margin-bottom:8px;">
+                    Historique ({{ game_state.move_history|length }} coups)
+                </div>
+                <ol class="history-list" id="history-list">
+                    {% for move in game_state.move_history %}
+                    <li class="history-item">
+                        <span class="{% if move[2] == 1 %}badge-red{% else %}badge-yellow{% endif %}">
+                            {{ 'Rouge' if move[2] == 1 else 'Jaune' }}
+                        </span>
+                        <span style="color:white;">Col {{ move[1]+1 }}</span>
+                        <span style="color:rgba(255,255,255,0.5);">#{{ loop.index }}</span>
+                    </li>
+                    {% endfor %}
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const ROUGE = {{ ROUGE }};
+const JAUNE = {{ JAUNE }};
+const BOARD_ROWS = {{ BOARD_ROWS }};
+const BOARD_COLS = {{ BOARD_COLS }};
+let isProcessing = false;
+let waitingForPlayerCol = false;
+let gameOver = {{ 'true' if game_state.game_over else 'false' }};
+
+// Afficher le modal d explication au premier chargement
+{% if not game_state.game_over %}
+const helpModal = new bootstrap.Modal(document.getElementById('helpModal'));
+helpModal.show();
+{% endif %}
+
+function showError(msg) {
+    const el = document.getElementById('error-msg');
+    el.textContent = msg;
+    el.classList.remove('d-none');
+    setTimeout(() => el.classList.add('d-none'), 3000);
+}
+
+function choosePlayer() {
+    if (isProcessing || gameOver) return;
+    waitingForPlayerCol = true;
+    document.getElementById('player-hint').classList.remove('d-none');
+    document.getElementById('btn-player').classList.add('btn-success');
+    document.getElementById('btn-player').classList.remove('btn-primary');
+    // Highlight column buttons
+    document.querySelectorAll('.col-btn').forEach(b => b.classList.add('btn-success'));
+}
+
+function chooseAI() {
+    if (isProcessing || gameOver) return;
+    waitingForPlayerCol = false;
+    document.getElementById('player-hint').classList.add('d-none');
+    document.getElementById('btn-player').classList.remove('btn-success');
+    document.getElementById('btn-player').classList.add('btn-primary');
+    document.querySelectorAll('.col-btn').forEach(b => b.classList.remove('btn-success'));
+    playMove('ai', -1);
+}
+
+function playerPlaysCol(col) {
+    if (!waitingForPlayerCol || isProcessing || gameOver) return;
+    waitingForPlayerCol = false;
+    document.getElementById('player-hint').classList.add('d-none');
+    document.getElementById('btn-player').classList.remove('btn-success');
+    document.getElementById('btn-player').classList.add('btn-primary');
+    document.querySelectorAll('.col-btn').forEach(b => b.classList.remove('btn-success'));
+    playMove('player', col);
+}
+
+// Clic sur les en-têtes de colonnes aussi
+document.querySelectorAll('.column-header').forEach(h => {
+    h.addEventListener('click', function() {
+        const col = parseInt(this.dataset.col);
+        if (waitingForPlayerCol) playerPlaysCol(col);
+    });
+});
+
+function playMove(whoPlays, col) {
+    if (isProcessing) return;
+    isProcessing = true;
+
+    const body = new URLSearchParams();
+    body.append('who_plays', whoPlays);
+    body.append('column', col);
+
+    fetch('/play_imported', { method: 'POST', body: body })
+    .then(r => r.json())
+    .then(data => {
+        isProcessing = false;
+        if (data.error) { showError(data.error); return; }
+        updateBoard(data.board);
+        updateScores(data.minimax_scores || []);
+        updateHistory(data.move_history);
+        highlightLastMove(data.played_row, data.played_col);
+
+        if (data.game_over) {
+            gameOver = true;
+            if (data.winning_cells) highlightWinning(data.winning_cells);
+            showGameOver(data.winner);
+        } else {
+            updateCurrentPlayer(data.current_player);
+        }
+    })
+    .catch(err => { isProcessing = false; showError('Erreur: ' + err.message); });
+}
+
+function updateBoard(boardData) {
+    document.querySelectorAll('.cell').forEach(cell => {
+        const r = parseInt(cell.dataset.row);
+        const c = parseInt(cell.dataset.col);
+        cell.className = 'cell';
+        if (boardData[r][c] === ROUGE) cell.classList.add('player-1');
+        else if (boardData[r][c] === JAUNE) cell.classList.add('player-2');
+    });
+}
+
+function highlightLastMove(row, col) {
+    const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+    if (cell) cell.classList.add('last-move');
+}
+
+function highlightWinning(cells) {
+    cells.forEach(([r, c]) => {
+        const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+        if (cell) cell.classList.add('winning-cell');
+    });
+}
+
+function updateScores(scores) {
+    const container = document.getElementById('minimax-scores');
+    if (!container || !scores.length) return;
+    let maxScore = -Infinity, maxIdx = -1;
+    scores.forEach((s, i) => { if (s > -999999 && s > maxScore) { maxScore = s; maxIdx = i; } });
+    container.innerHTML = '';
+    scores.forEach((score, i) => {
+        const d = document.createElement('div');
+        const invalid = score === null || score <= -999999;
+        d.className = 'score-badge' + (invalid ? ' invalid' : (i === maxIdx ? ' highlight' : ''));
+        d.textContent = invalid ? '✕' : Math.round(score);
+        container.appendChild(d);
+    });
+}
+
+function updateHistory(history) {
+    const list = document.getElementById('history-list');
+    if (!list) return;
+    list.innerHTML = '';
+    history.forEach((move, i) => {
+        const li = document.createElement('li');
+        li.className = 'history-item';
+        const cls = move[2] === ROUGE ? 'badge-red' : 'badge-yellow';
+        const name = move[2] === ROUGE ? 'Rouge' : 'Jaune';
+        li.innerHTML = `<span class="${cls}">${name}</span><span style="color:white;">Col ${move[1]+1}</span><span style="color:rgba(255,255,255,0.5);">#${i+1}</span>`;
+        list.appendChild(li);
+    });
+    list.scrollTop = list.scrollHeight;
+}
+
+function updateCurrentPlayer(player) {
+    const badge = document.querySelector('.current-player-badge');
+    if (!badge) return;
+    badge.className = 'current-player-badge bg-' + (player === ROUGE ? 'danger' : 'warning text-dark');
+    badge.textContent = player === ROUGE ? '🔴 Rouge' : '🟡 Jaune';
+}
+
+function showGameOver(winner) {
+    const panel = document.querySelector('.choice-panel');
+    if (!panel) return;
+    const msg = winner === 0 ? 'Match nul !' : (winner === ROUGE ? '🔴 Rouge gagne !' : '🟡 Jaune gagne !');
+    panel.innerHTML = `
+        <h5>Partie terminée</h5>
+        <div class="alert alert-success mt-3 text-center">${msg}</div>
+        <div class="d-grid gap-2 mt-3">
+            <a href="/import_game" class="btn btn-primary">Nouvelle importation</a>
+            <a href="/" class="btn btn-secondary">Accueil</a>
+        </div>`;
+}
+</script>
+{% endblock %}
