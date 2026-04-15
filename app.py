@@ -1887,42 +1887,92 @@ def get_win_in():
     try:
         board = session['game_state']['board']
 
-        def min_moves_to_win(board, player, max_depth=6):
-            """Cherche le nombre minimum de coups pour gagner avec BFS iteratif"""
-            import copy as cp
+        def best_win_depth(b, player, max_depth=7):
+            """
+            Retourne le nombre minimum de coups du joueur pour gagner.
+            On cherche si le joueur peut forcer une victoire en ignorant
+            les coups adverses (cas optimiste) puis en les incluant.
+            Approche : pour chaque coup du joueur, on verifie s il gagne
+            ou si apres la reponse adverse il peut encore gagner.
+            """
             opponent = ROUGE if player == JAUNE else JAUNE
 
-            for depth in range(1, max_depth + 1):
-                # DFS avec profondeur limitee pour trouver victoire en exactement depth coups
-                def can_win_in(b, d, is_my_turn):
-                    if d == 0:
-                        return False
-                    cur = player if is_my_turn else opponent
-                    for col in range(BOARD_COLS):
-                        if is_valid_move(b, col):
-                            row = get_next_open_row(b, col)
-                            if row is None:
-                                continue
-                            b[row][col] = cur
-                            win = check_win(b, row, col, cur)[0]
-                            if win and is_my_turn:
-                                b[row][col] = EMPTY
-                                return True
-                            if not win:
-                                result = can_win_in(b, d - 1, not is_my_turn)
-                                if result and is_my_turn:
-                                    b[row][col] = EMPTY
-                                    return True
-                            b[row][col] = EMPTY
+            def dfs(board, depth_left, player_turn):
+                """
+                Retourne True si le joueur peut gagner avec depth_left coups
+                restants (coups du joueur seulement).
+                player_turn=True : c est le tour du joueur qu on evalue.
+                """
+                if depth_left == 0:
                     return False
 
-                board_copy = [row[:] for row in board]
-                if can_win_in(board_copy, depth, True):
-                    return depth
-            return None  # Pas trouve dans max_depth coups
+                cur = player if player_turn else opponent
 
-        rouge_in = min_moves_to_win(board, ROUGE, max_depth=5)
-        jaune_in = min_moves_to_win(board, JAUNE, max_depth=5)
+                for col in range(BOARD_COLS):
+                    if not is_valid_move(board, col):
+                        continue
+                    row = get_next_open_row(board, col)
+                    if row is None:
+                        continue
+
+                    board[row][col] = cur
+                    won = check_win(board, row, col, cur)[0]
+
+                    if won and player_turn:
+                        # Le joueur gagne ici
+                        board[row][col] = EMPTY
+                        return True
+
+                    if not won:
+                        if player_turn:
+                            # Apres le coup du joueur, l adversaire joue
+                            # On cherche si malgre la reponse adverse on peut gagner
+                            found = False
+                            for col2 in range(BOARD_COLS):
+                                if not is_valid_move(board, col2):
+                                    continue
+                                row2 = get_next_open_row(board, col2)
+                                if row2 is None:
+                                    continue
+                                board[row2][col2] = opponent
+                                opp_won = check_win(board, row2, col2, opponent)[0]
+                                if not opp_won:
+                                    result = dfs(board, depth_left - 1, True)
+                                    if result:
+                                        board[row2][col2] = EMPTY
+                                        found = True
+                                        break
+                                board[row2][col2] = EMPTY
+                            if found:
+                                board[row][col] = EMPTY
+                                return True
+                        # Si c est le tour adverse on continue
+
+                    board[row][col] = EMPTY
+
+                return False
+
+            # Chercher victoire immediate d abord
+            for col in range(BOARD_COLS):
+                if is_valid_move(board, col):
+                    row = get_next_open_row(board, col)
+                    if row is not None:
+                        board[row][col] = player
+                        if check_win(board, row, col, player)[0]:
+                            board[row][col] = EMPTY
+                            return 1
+                        board[row][col] = EMPTY
+
+            # Chercher victoire en N coups
+            for n in range(2, max_depth + 1):
+                b_copy = [row[:] for row in b]
+                if dfs(b_copy, n, True):
+                    return n
+
+            return None
+
+        rouge_in = best_win_depth(board, ROUGE, max_depth=6)
+        jaune_in  = best_win_depth(board, JAUNE,  max_depth=6)
 
         return jsonify({
             'rouge_in': rouge_in,
@@ -1930,6 +1980,7 @@ def get_win_in():
         })
     except Exception as e:
         print(f'Erreur get_win_in: {e}')
+        traceback.print_exc()
         return jsonify({'rouge_in': None, 'jaune_in': None})
 
 
