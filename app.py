@@ -83,386 +83,323 @@ def safe_divide(numerator, denominator, default=0):
 
 # ====================== CLASSES DE JEU ======================
 class AIPlayer:
-    def __init__(self, ai_type='random', depth=3):
+    """
+    IA Puissance 4 — Minimax + Alpha-Beta + Optimisations
+    - Heuristique par fenetres de 4 (scan complet)
+    - Table de transposition avec flags exact/lower/upper
+    - Killer moves
+    - Pas de deepcopy — modification en place
+    - Approfondissement iteratif pour utiliser le temps au mieux
+    """
+
+    def __init__(self, ai_type="random", depth=5):
         self.ai_type = ai_type
-        self.depth = depth
-        self.weights = {
-            'center_weight': 6.0,
-            'three_in_row_weight': 100.0,
-            'two_in_row_weight': 10.0,
-            'opponent_three_weight': -200.0
-        }
+        self.depth   = depth
+        self.tt      = {}   # Transposition table : key -> (score, flag, depth, move)
+        self.killers = [[None, None] for _ in range(30)]
+        self.pos_w   = self._pos_weights()
 
-    def evaluate_position(self, board, depth, is_maximizing):
-        """Évalue une position du plateau avec une heuristique forte"""
-        if self.ai_type == 'random':
-            return random.random()
+    # ------------------------------------------------------------------
+    def _pos_weights(self):
+        w = []
+        for r in range(BOARD_ROWS):
+            row = []
+            for c in range(BOARD_COLS):
+                dr = BOARD_ROWS // 2 - abs(r - BOARD_ROWS // 2)
+                dc = BOARD_COLS // 2 - abs(c - BOARD_COLS // 2)
+                row.append(dr + dc)
+            w.append(row)
+        return w
 
-        if is_board_full(board):
+    def _key(self, board):
+        return tuple(cell for row in board for cell in row)
+
+    # ------------------------------------------------------------------
+    def _eval_window(self, w, player, opp):
+        p = w.count(player)
+        o = w.count(opp)
+        e = w.count(EMPTY)
+        if o > 0 and p > 0:
             return 0
+        if p == 4: return  500000
+        if p == 3: return    2000
+        if p == 2: return     100
+        if p == 1: return       5
+        if o == 4: return -600000
+        if o == 3: return  -3000
+        if o == 2: return   -150
+        if o == 1: return     -6
+        return 0
 
-        player   = JAUNE if is_maximizing else ROUGE
-        opponent = ROUGE if is_maximizing else JAUNE
-
+    def heuristic(self, board, player):
+        """Scan de toutes les fenetres de 4 — horizontal / vertical / diagonales"""
+        opp   = ROUGE if player == JAUNE else JAUNE
         score = 0
-        score += self.evaluate_alignments(board, player) * 10
-        score += self.evaluate_center_control(board, player) * 5
-        score += self.evaluate_column_threats(board, player, opponent) * 8
-        score += self.evaluate_double_threats(board, player, opponent) * 15
-        score -= depth * 0.1
+
+        # Horizontal
+        for r in range(BOARD_ROWS):
+            for c in range(BOARD_COLS - 3):
+                score += self._eval_window([board[r][c+i] for i in range(4)], player, opp)
+
+        # Vertical
+        for c in range(BOARD_COLS):
+            for r in range(BOARD_ROWS - 3):
+                score += self._eval_window([board[r+i][c] for i in range(4)], player, opp)
+
+        # Diag descendante
+        for r in range(BOARD_ROWS - 3):
+            for c in range(BOARD_COLS - 3):
+                score += self._eval_window([board[r+i][c+i] for i in range(4)], player, opp)
+
+        # Diag montante
+        for r in range(3, BOARD_ROWS):
+            for c in range(BOARD_COLS - 3):
+                score += self._eval_window([board[r-i][c+i] for i in range(4)], player, opp)
+
+        # Bonus positionnel
+        for r in range(BOARD_ROWS):
+            for c in range(BOARD_COLS):
+                if board[r][c] == player:
+                    score += self.pos_w[r][c]
+                elif board[r][c] == opp:
+                    score -= self.pos_w[r][c]
 
         return score
 
-    def evaluate_double_threats(self, board, player, opponent):
-        """Détecte les double menaces — deux alignements de 3 simultanés"""
-        score = 0
-        threat_count = 0
-        opponent_threat_count = 0
-
+    # ------------------------------------------------------------------
+    def _win_col(self, board, player):
+        """Retourne la premiere colonne gagnante ou None"""
         for col in range(BOARD_COLS):
-            if not is_valid_move(board, col):
-                continue
+            if is_valid_move(board, col):
+                row = get_next_open_row(board, col)
+                if row is not None:
+                    board[row][col] = player
+                    win = check_win(board, row, col, player)[0]
+                    board[row][col] = EMPTY
+                    if win:
+                        return col
+        return None
+
+    def _count_threats(self, board, player):
+        """Nombre de coups gagnants disponibles"""
+        n = 0
+        for col in range(BOARD_COLS):
+            if is_valid_move(board, col):
+                row = get_next_open_row(board, col)
+                if row is not None:
+                    board[row][col] = player
+                    if check_win(board, row, col, player)[0]:
+                        n += 1
+                    board[row][col] = EMPTY
+        return n
+
+    # ------------------------------------------------------------------
+    def _order(self, board, moves, player, ply):
+        """Trie les coups : killer > centre > score rapide"""
+        opp = ROUGE if player == JAUNE else JAUNE
+        scored = []
+        k0 = self.killers[ply][0] if ply < len(self.killers) else None
+        k1 = self.killers[ply][1] if ply < len(self.killers) else None
+
+        for col in moves:
             row = get_next_open_row(board, col)
             if row is None:
                 continue
+            s = self.pos_w[row][col] * 3
+            if col == k0: s += 8000
+            elif col == k1: s += 4000
 
-            # Simuler le coup du joueur
+            # Fenetre rapide autour du coup
             board[row][col] = player
-            wins = 0
-            directions = [(0,1),(1,0),(1,1),(1,-1)]
-            for dr, dc in directions:
-                if self.check_alignment(board, row, col, dr, dc, player, 3):
-                    wins += 1
-            if wins >= 2:
-                threat_count += 1  # Double menace joueur
+            for dr, dc in [(0,1),(1,0),(1,1),(1,-1)]:
+                w = []
+                for i in range(-3, 4):
+                    r2, c2 = row+i*dr, col+i*dc
+                    if 0 <= r2 < BOARD_ROWS and 0 <= c2 < BOARD_COLS:
+                        w.append(board[r2][c2])
+                for i in range(len(w)-3):
+                    seg = w[i:i+4]
+                    pc = seg.count(player)
+                    ec = seg.count(EMPTY)
+                    if pc == 3 and ec == 1: s += 900
+                    elif pc == 2 and ec == 2: s += 80
             board[row][col] = EMPTY
 
-            # Simuler le coup adverse
-            board[row][col] = opponent
-            opp_wins = 0
-            for dr, dc in directions:
-                if self.check_alignment(board, row, col, dr, dc, opponent, 3):
-                    opp_wins += 1
-            if opp_wins >= 2:
-                opponent_threat_count += 1  # Double menace adverse
+            board[row][col] = opp
+            for dr, dc in [(0,1),(1,0),(1,1),(1,-1)]:
+                w = []
+                for i in range(-3, 4):
+                    r2, c2 = row+i*dr, col+i*dc
+                    if 0 <= r2 < BOARD_ROWS and 0 <= c2 < BOARD_COLS:
+                        w.append(board[r2][c2])
+                for i in range(len(w)-3):
+                    seg = w[i:i+4]
+                    oc = seg.count(opp)
+                    ec = seg.count(EMPTY)
+                    if oc == 3 and ec == 1: s += 1100
+                    elif oc == 2 and ec == 2: s += 90
             board[row][col] = EMPTY
 
-        score += threat_count * 500
-        score -= opponent_threat_count * 600  # Bloquer les doubles menaces adverses en priorite
-        return score
+            scored.append((col, s))
 
-    def evaluate_alignments(self, board, player):
-        """Évalue les alignements avec scores renforcés"""
-        opponent = ROUGE if player == JAUNE else JAUNE
-        score = 0
-        directions = [(0, 1), (1, 0), (1, 1), (1, -1)]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return [c for c, _ in scored]
 
-        for row in range(BOARD_ROWS):
-            for col in range(BOARD_COLS):
-                if board[row][col] == EMPTY:
-                    continue
-                for dr, dc in directions:
-                    # Alignements de 4
-                    if self.check_alignment(board, row, col, dr, dc, player, 4):
-                        score += 10000
-                    elif self.check_alignment(board, row, col, dr, dc, opponent, 4):
-                        score -= 9000
+    # ------------------------------------------------------------------
+    def minimax(self, board, depth, ply, maximizing, player,
+                alpha=-float("inf"), beta=float("inf")):
+        opp = ROUGE if player == JAUNE else JAUNE
+        cur = player if maximizing else opp
 
-                    # Alignements de 3 avec trou (tres dangereux)
-                    if self.check_alignment_with_gap(board, row, col, dr, dc, player, 3):
-                        score += 500
-                    elif self.check_alignment_with_gap(board, row, col, dr, dc, opponent, 3):
-                        score -= 600
+        # Table de transposition
+        key = self._key(board)
+        if key in self.tt:
+            s, flag, d, m = self.tt[key]
+            if d >= depth:
+                if flag == 0:   return s, m        # Exact
+                elif flag == 1: alpha = max(alpha, s)  # Lower bound
+                elif flag == 2: beta  = min(beta,  s)  # Upper bound
+                if alpha >= beta:
+                    return s, m
 
-                    # Alignements de 3 pleins
-                    if self.check_alignment(board, row, col, dr, dc, player, 3):
-                        score += 200
-                    elif self.check_alignment(board, row, col, dr, dc, opponent, 3):
-                        score -= 250
+        # Victoire immediate du joueur courant
+        wc = self._win_col(board, cur)
+        if wc is not None:
+            sc = (500000 + depth * 10) if maximizing else -(500000 + depth * 10)
+            return sc, wc
 
-                    # Alignements de 2 avec trou
-                    if self.check_alignment_with_gap(board, row, col, dr, dc, player, 2):
-                        score += 20
-                    elif self.check_alignment_with_gap(board, row, col, dr, dc, opponent, 2):
-                        score -= 25
-
-                    # Alignements de 2 pleins
-                    if self.check_alignment(board, row, col, dr, dc, player, 2):
-                        score += 10
-                    elif self.check_alignment(board, row, col, dr, dc, opponent, 2):
-                        score -= 12
-
-        return score
-
-    def check_alignment(self, board, row, col, dr, dc, player, length):
-        """Vérifie s'il y a un alignement de 'length' pions du joueur"""
-        if board[row][col] != player:
-            return False
-        count = 1
-        r, c = row + dr, col + dc
-        for _ in range(length - 1):
-            if 0 <= r < BOARD_ROWS and 0 <= c < BOARD_COLS and board[r][c] == player:
-                count += 1
-                r += dr
-                c += dc
-            else:
-                break
-        r, c = row - dr, col - dc
-        for _ in range(length - 1):
-            if 0 <= r < BOARD_ROWS and 0 <= c < BOARD_COLS and board[r][c] == player:
-                count += 1
-                r -= dr
-                c -= dc
-            else:
-                break
-        return count >= length
-
-    def check_alignment_with_gap(self, board, row, col, dr, dc, player, length):
-        """Vérifie s'il y a un alignement de 'length' pions avec un trou"""
-        count = 0
-        gap_found = False
-        r, c = row, col
-        for _ in range(length):
-            if 0 <= r < BOARD_ROWS and 0 <= c < BOARD_COLS:
-                if board[r][c] == player:
-                    count += 1
-                elif board[r][c] == EMPTY and not gap_found:
-                    gap_found = True
-                else:
-                    break
-            else:
-                break
-            r += dr
-            c += dc
-        r, c = row - dr, col - dc
-        for _ in range(length - count):
-            if 0 <= r < BOARD_ROWS and 0 <= c < BOARD_COLS:
-                if board[r][c] == player:
-                    count += 1
-                elif board[r][c] == EMPTY and not gap_found:
-                    gap_found = True
-                else:
-                    break
-            else:
-                break
-            r -= dr
-            c -= dc
-        return count >= length - 1 and gap_found
-
-    def evaluate_center_control(self, board, player):
-        """Évalue le contrôle des colonnes centrales"""
-        opponent = ROUGE if player == JAUNE else JAUNE
-        score = 0
-        column_weights = [1, 2, 3, 4, 3, 2, 1, 1, 1]
-
-        for col in range(BOARD_COLS):
-            player_count = 0
-            opponent_count = 0
-            for row in range(BOARD_ROWS):
-                if board[row][col] == player:
-                    player_count += 1
-                elif board[row][col] == opponent:
-                    opponent_count += 1
-            if player_count > opponent_count:
-                score += player_count * column_weights[col]
-            elif opponent_count > player_count:
-                score -= opponent_count * column_weights[col]
-
-        return score
-
-    def evaluate_column_threats(self, board, player, opponent):
-        """Évalue les menaces de victoire immédiate ou les colonnes presque pleines"""
-        score = 0
-        for col in range(BOARD_COLS):
-            empty_count = 0
-            player_count = 0
-            opponent_count = 0
-            for row in range(BOARD_ROWS):
-                if board[row][col] == EMPTY:
-                    empty_count += 1
-                elif board[row][col] == player:
-                    player_count += 1
-                else:
-                    opponent_count += 1
-            if empty_count == 1 and opponent_count >= 3:
-                score -= 50
-            if empty_count == 1 and player_count >= 3:
-                score += 50
-        return score
-
-    def check_immediate_win(self, board, player):
-        """Vérifie si un coup peut gagner immédiatement"""
-        for col in range(BOARD_COLS):
-            if is_valid_move(board, col):
-                row = get_next_open_row(board, col)
-                if row is not None:
-                    temp_board = copy.deepcopy(board)
-                    temp_board[row][col] = player
-                    if check_win(temp_board, row, col, player)[0]:
-                        return col
-        return None
-
-    def check_immediate_loss(self, board, player):
-        """Vérifie si un coup adverse peut gagner immédiatement"""
-        opponent = ROUGE if player == JAUNE else JAUNE
-        for col in range(BOARD_COLS):
-            if is_valid_move(board, col):
-                row = get_next_open_row(board, col)
-                if row is not None:
-                    temp_board = copy.deepcopy(board)
-                    temp_board[row][col] = opponent
-                    if check_win(temp_board, row, col, opponent)[0]:
-                        return col
-        return None
-
-    def minimax(self, board, depth, is_maximizing, player, alpha=-float('inf'), beta=float('inf')):
-        """Algorithme Minimax avec élagage alpha-bêta amélioré"""
-        opponent = ROUGE if player == JAUNE else JAUNE
-        current = player if is_maximizing else opponent
-
-        # --- Vérification victoire/blocage à CHAQUE niveau ---
-        # Victoire immédiate du joueur courant
-        winning_move = self.check_immediate_win(board, current)
-        if winning_move is not None:
-            return (float('inf'), winning_move) if is_maximizing else (-float('inf'), winning_move)
-
-        # Blocage victoire adverse
-        blocking_move = self.check_immediate_loss(board, current)
-        if blocking_move is not None:
-            score = float('inf') - 1 if is_maximizing else -float('inf') + 1
-            return score, blocking_move
+        # Bloquer victoire adverse
+        bc = self._win_col(board, opp if maximizing else player)
+        if bc is not None:
+            sc = (499000 + depth * 10) if maximizing else -(499000 + depth * 10)
+            return sc, bc
 
         if depth == 0 or is_board_full(board):
-            return self.evaluate_position(board, self.depth - depth, is_maximizing), None
+            sc = self.heuristic(board, player if maximizing else opp)
+            return sc, None
 
-        valid_moves = [col for col in range(BOARD_COLS) if is_valid_move(board, col)]
-        if not valid_moves:
+        moves = [c for c in range(BOARD_COLS) if is_valid_move(board, c)]
+        if not moves:
             return 0, None
 
-        # Trier les coups : centre en priorité, puis coups les plus prometteurs
-        valid_moves.sort(key=lambda col: abs(col - BOARD_COLS // 2))
+        ordered   = self._order(board, moves, cur, ply)
+        best_move = ordered[0]
+        orig_alpha = alpha
 
-        if is_maximizing:
-            best_score = -float('inf')
-            best_move = None
-            for col in valid_moves:
+        if maximizing:
+            best = -float("inf")
+            for col in ordered:
                 row = get_next_open_row(board, col)
-                if row is not None:
-                    temp_board = copy.deepcopy(board)
-                    temp_board[row][col] = player
-                    # Verifier victoire directe apres le coup
-                    if check_win(temp_board, row, col, player)[0]:
-                        return float('inf'), col
-                    score, _ = self.minimax(temp_board, depth - 1, False, opponent, alpha, beta)
-                    if score > best_score:
-                        best_score = score
-                        best_move = col
-                    alpha = max(alpha, best_score)
-                    if beta <= alpha:
-                        break
-            return best_score, best_move
+                if row is None: continue
+                board[row][col] = player
+                if check_win(board, row, col, player)[0]:
+                    board[row][col] = EMPTY
+                    sc = 500000 + depth * 10
+                    self.tt[key] = (sc, 0, depth, col)
+                    return sc, col
+                sc, _ = self.minimax(board, depth-1, ply+1, False, opp, alpha, beta)
+                board[row][col] = EMPTY
+                if sc > best:
+                    best = sc
+                    best_move = col
+                alpha = max(alpha, best)
+                if alpha >= beta:
+                    if ply < len(self.killers) and self.killers[ply][0] != col:
+                        self.killers[ply][1] = self.killers[ply][0]
+                        self.killers[ply][0] = col
+                    break
         else:
-            best_score = float('inf')
-            best_move = None
-            for col in valid_moves:
+            best = float("inf")
+            for col in ordered:
                 row = get_next_open_row(board, col)
-                if row is not None:
-                    temp_board = copy.deepcopy(board)
-                    temp_board[row][col] = opponent
-                    # Verifier victoire adverse directe apres le coup
-                    if check_win(temp_board, row, col, opponent)[0]:
-                        return -float('inf'), col
-                    score, _ = self.minimax(temp_board, depth - 1, True, player, alpha, beta)
-                    if score < best_score:
-                        best_score = score
-                        best_move = col
-                    beta = min(beta, best_score)
-                    if beta <= alpha:
-                        break
-            return best_score, best_move
+                if row is None: continue
+                board[row][col] = opp
+                if check_win(board, row, col, opp)[0]:
+                    board[row][col] = EMPTY
+                    sc = -(500000 + depth * 10)
+                    self.tt[key] = (sc, 0, depth, col)
+                    return sc, col
+                sc, _ = self.minimax(board, depth-1, ply+1, True, player, alpha, beta)
+                board[row][col] = EMPTY
+                if sc < best:
+                    best = sc
+                    best_move = col
+                beta = min(beta, best)
+                if alpha >= beta:
+                    if ply < len(self.killers) and self.killers[ply][0] != col:
+                        self.killers[ply][1] = self.killers[ply][0]
+                        self.killers[ply][0] = col
+                    break
 
-    def score_move_quick(self, board, row, col, player):
-        """Évalue rapidement un coup pour trier les coups avant minimax"""
-        score = 0
-        opponent = ROUGE if player == JAUNE else JAUNE
-        directions = [(0,1),(1,0),(1,1),(1,-1)]
+        # Stocker dans la table de transposition avec flag
+        flag = 0 if best > orig_alpha and best < beta else (1 if best >= beta else 2)
+        self.tt[key] = (best, flag, depth, best_move)
+        if len(self.tt) > 500000:
+            self.tt.clear()
 
-        # Bonus centre
-        score += (BOARD_COLS // 2 - abs(col - BOARD_COLS // 2)) * 3
-        score += (BOARD_ROWS // 2 - abs(row - BOARD_ROWS // 2)) * 2
+        return best, best_move
 
-        board[row][col] = player
-        for dr, dc in directions:
-            if self.check_alignment(board, row, col, dr, dc, player, 3):
-                score += 200
-            if self.check_alignment(board, row, col, dr, dc, player, 2):
-                score += 50
-            if self.check_alignment_with_gap(board, row, col, dr, dc, player, 3):
-                score += 150
-        board[row][col] = EMPTY
-
-        # Penaliser si l adversaire a des alignements sur cette colonne
-        board[row][col] = opponent
-        for dr, dc in directions:
-            if self.check_alignment(board, row, col, dr, dc, opponent, 3):
-                score += 180  # Bloquer en priorite
-        board[row][col] = EMPTY
-
-        return score
-
+    # ------------------------------------------------------------------
     def choose_move(self, board, current_player):
-        """Choisit le meilleur coup avec tri intelligent des coups"""
-        if self.ai_type == 'random':
-            valid_moves = [col for col in range(BOARD_COLS) if is_valid_move(board, col)]
-            return random.choice(valid_moves) if valid_moves else None, None, {}
+        if self.ai_type == "random":
+            valid = [c for c in range(BOARD_COLS) if is_valid_move(board, c)]
+            return (random.choice(valid) if valid else None), None, {}
+
+        self.tt.clear()
+        self.killers = [[None, None] for _ in range(30)]
+        opp = ROUGE if current_player == JAUNE else JAUNE
 
         # 1. Victoire immediate
-        winning_move = self.check_immediate_win(board, current_player)
-        if winning_move is not None:
-            scores = {col: 0.0 for col in range(BOARD_COLS)}
-            scores[winning_move] = float('inf')
-            return winning_move, float('inf'), scores
+        wc = self._win_col(board, current_player)
+        if wc is not None:
+            return wc, float("inf"), {wc: float("inf")}
 
-        # 2. Blocage victoire adverse
-        blocking_move = self.check_immediate_loss(board, current_player)
-        if blocking_move is not None:
-            scores = {col: 0.0 for col in range(BOARD_COLS)}
-            scores[blocking_move] = float('inf') - 1
-            return blocking_move, float('inf') - 1, scores
+        # 2. Bloquer victoire adverse
+        bc = self._win_col(board, opp)
+        if bc is not None:
+            return bc, float("inf")-1, {bc: float("inf")-1}
 
-        # 3. Trier les coups par score rapide avant minimax
-        # Cela ameliore l elagage alpha-beta et rend l IA plus forte
-        valid_moves = [col for col in range(BOARD_COLS) if is_valid_move(board, col)]
-        move_scores_quick = []
-        for col in valid_moves:
+        # 3. Double menace — creer une position avec 2 coups gagnants
+        best_dt, best_dt_n = None, 0
+        for col in range(BOARD_COLS):
+            if is_valid_move(board, col):
+                row = get_next_open_row(board, col)
+                if row is not None:
+                    board[row][col] = current_player
+                    n = self._count_threats(board, current_player)
+                    board[row][col] = EMPTY
+                    if n >= 2 and n > best_dt_n:
+                        best_dt_n = n
+                        best_dt = col
+        if best_dt is not None:
+            return best_dt, float("inf")-2, {best_dt: float("inf")-2}
+
+        # 4. Approfondissement iteratif — on commence a depth=2 et on monte
+        #    jusqu a self.depth. Ca permet d avoir toujours un bon coup meme
+        #    si le temps manque, et l elagage est plus efficace.
+        valid  = [c for c in range(BOARD_COLS) if is_valid_move(board, c)]
+        best_col   = valid[0]
+        best_score = -float("inf")
+        scores     = {}
+
+        for d in range(2, self.depth + 1):
+            sc, mv = self.minimax(board, d, 0, True, current_player,
+                                   -float("inf"), float("inf"))
+            if mv is not None:
+                best_col   = mv
+                best_score = sc
+
+        # Scores pour affichage
+        for col in valid:
             row = get_next_open_row(board, col)
             if row is not None:
-                quick_score = self.score_move_quick(board, row, col, current_player)
-                move_scores_quick.append((col, quick_score))
+                board[row][col] = current_player
+                sc, _ = self.minimax(board, max(1, self.depth-2), 0, False,
+                                      opp, -float("inf"), float("inf"))
+                board[row][col] = EMPTY
+                scores[col] = -sc
 
-        # Trier du meilleur au moins bon
-        move_scores_quick.sort(key=lambda x: x[1], reverse=True)
-        sorted_moves = [col for col, _ in move_scores_quick]
-
-        # 4. Minimax sur les coups triés
-        best_score = -float('inf')
-        best_move = None
-        scores = {}
-
-        for col in sorted_moves:
-            row = get_next_open_row(board, col)
-            if row is not None:
-                temp_board = copy.deepcopy(board)
-                temp_board[row][col] = current_player
-                score, _ = self.minimax(temp_board, self.depth - 1, False, current_player, -float('inf'), float('inf'))
-                temp_board[row][col] = EMPTY
-                scores[col] = score
-                if score > best_score:
-                    best_score = score
-                    best_move = col
-
-        return best_move, best_score, scores
-
+        return best_col, best_score, scores
 
 # ====================== FONCTIONS UTILITAIRES ======================
 def create_board():
@@ -1942,6 +1879,60 @@ def before_request():
         print("Apprentissage depuis la BDD lance en arriere-plan")
 
 
+@app.route('/get_win_in', methods=['POST'])
+def get_win_in():
+    """Calcule en combien de coups Rouge et Jaune peuvent gagner"""
+    if 'game_state' not in session:
+        return jsonify({'error': 'Aucune partie'}), 400
+    try:
+        board = session['game_state']['board']
+
+        def min_moves_to_win(board, player, max_depth=6):
+            """Cherche le nombre minimum de coups pour gagner avec BFS iteratif"""
+            import copy as cp
+            opponent = ROUGE if player == JAUNE else JAUNE
+
+            for depth in range(1, max_depth + 1):
+                # DFS avec profondeur limitee pour trouver victoire en exactement depth coups
+                def can_win_in(b, d, is_my_turn):
+                    if d == 0:
+                        return False
+                    cur = player if is_my_turn else opponent
+                    for col in range(BOARD_COLS):
+                        if is_valid_move(b, col):
+                            row = get_next_open_row(b, col)
+                            if row is None:
+                                continue
+                            b[row][col] = cur
+                            win = check_win(b, row, col, cur)[0]
+                            if win and is_my_turn:
+                                b[row][col] = EMPTY
+                                return True
+                            if not win:
+                                result = can_win_in(b, d - 1, not is_my_turn)
+                                if result and is_my_turn:
+                                    b[row][col] = EMPTY
+                                    return True
+                            b[row][col] = EMPTY
+                    return False
+
+                board_copy = [row[:] for row in board]
+                if can_win_in(board_copy, depth, True):
+                    return depth
+            return None  # Pas trouve dans max_depth coups
+
+        rouge_in = min_moves_to_win(board, ROUGE, max_depth=5)
+        jaune_in = min_moves_to_win(board, JAUNE, max_depth=5)
+
+        return jsonify({
+            'rouge_in': rouge_in,
+            'jaune_in': jaune_in
+        })
+    except Exception as e:
+        print(f'Erreur get_win_in: {e}')
+        return jsonify({'rouge_in': None, 'jaune_in': None})
+
+
 @app.route('/learn_from_db')
 def learn_from_db():
     """Déclenche l apprentissage depuis la BDD manuellement"""
@@ -2841,6 +2832,193 @@ def start_game(mode):
         return redirect(url_for('index'))
 
 
+@app.route('/import_choose_next', methods=['GET', 'POST'])
+def import_choose_next():
+    """Apres un import, choisir qui joue le prochain coup"""
+    if 'imported_game' not in session:
+        flash('Aucune partie importee', 'error')
+        return redirect(url_for('import_game'))
+
+    if request.method == 'POST':
+        try:
+            game = session['imported_game']
+            next_player = int(request.form.get('next_player', ROUGE))
+
+            # Appliquer le choix du joueur courant
+            game['current_player'] = next_player
+            game = validate_and_fix_game_state(game)
+            session['game_state'] = game
+
+            mode = game['mode']
+            ai_type = game.get('ai_type')
+
+            # Calculer scores Minimax si besoin
+            if mode == 1 and ai_type == 'minimax':
+                weights = load_learning_weights()
+                try:
+                    scores = calculate_minimax_scores(game['board'], ROUGE, game['ai_depth'], weights)
+                    session['game_state']['minimax_scores'] = [round(s, 1) if s != -float('inf') else -1000000 for s in scores]
+                except Exception as e:
+                    session['game_state']['minimax_scores'] = [0] * BOARD_COLS
+
+            # Si c est le tour de l IA, la faire jouer
+            if mode == 1 and next_player == JAUNE:
+                if ai_type == 'minimax':
+                    play_ai_minimax_move(session['game_state'])
+                else:
+                    play_ai_random_move(session['game_state'])
+
+            flash(f"Partie importee avec succes !", "success")
+            session.pop('imported_game', None)
+
+            if mode == 0:
+                return redirect(url_for('game_ia_vs_ia'))
+            elif mode == 1:
+                if ai_type == 'minimax':
+                    return redirect(url_for('game_player_vs_minimax_ia'))
+                else:
+                    return redirect(url_for('game_player_vs_random_ia'))
+            else:
+                return redirect(url_for('game_player_vs_player'))
+
+        except Exception as e:
+            flash(f'Erreur: {str(e)}', 'error')
+            traceback.print_exc()
+            return redirect(url_for('import_game'))
+
+    game = session['imported_game']
+    return render_template('import_choose_next.html',
+                           game=game,
+                           board=game['board'],
+                           move_count=len(game['move_history']),
+                           ROUGE=ROUGE,
+                           JAUNE=JAUNE,
+                           BOARD_ROWS=BOARD_ROWS,
+                           BOARD_COLS=BOARD_COLS)
+
+
+@app.route('/game_imported')
+def game_imported():
+    """Page de jeu speciale pour les parties importees — choix joueur/IA a chaque coup"""
+    if 'game_state' not in session or not session['game_state'].get('is_imported'):
+        return redirect(url_for('import_game'))
+    game_state = session['game_state']
+    game_state = validate_and_fix_game_state(game_state)
+    session['game_state'] = game_state
+    return render_template('game_imported.html',
+                           game_state=game_state,
+                           ROUGE=ROUGE, JAUNE=JAUNE,
+                           BOARD_ROWS=BOARD_ROWS, BOARD_COLS=BOARD_COLS)
+
+
+@app.route('/play_imported', methods=['POST'])
+def play_imported():
+    """Gere un coup dans le mode importe — joueur ou IA selon le choix"""
+    if 'game_state' not in session:
+        return jsonify({'error': 'Aucune partie en cours'}), 400
+
+    try:
+        game_state = session['game_state']
+        board = game_state['board']
+        who_plays = request.form.get('who_plays', 'player')  # 'player' ou 'ai'
+        column = int(request.form.get('column', -1))
+
+        if game_state['game_over']:
+            return jsonify({'error': 'La partie est deja terminee'}), 400
+
+        current_player = game_state['current_player']
+
+        if who_plays == 'ai':
+            # L IA joue avec la nouvelle IA performante
+            depth = game_state.get('ai_depth', load_learning_weights().get('depth', 5))
+            ai = AIPlayer(ai_type='minimax', depth=depth)
+
+            # Priorites : gagner > bloquer > double menace > minimax
+            col = ai.check_immediate_win(board, current_player)
+            if col is None:
+                col = ai.check_immediate_loss(board, current_player)
+            if col is None:
+                # Double menace
+                best_double = None
+                best_wins = 0
+                for c in range(BOARD_COLS):
+                    if is_valid_move(board, c):
+                        r = get_next_open_row(board, c)
+                        if r is not None:
+                            board[r][c] = current_player
+                            wins = ai.count_winning_moves(board, current_player)
+                            board[r][c] = EMPTY
+                            if wins >= 2 and wins > best_wins:
+                                best_wins = wins
+                                best_double = c
+                if best_double is not None:
+                    col = best_double
+            if col is None:
+                col, _, _ = ai.choose_move(board, current_player)
+            if col is None:
+                valid = [c for c in range(BOARD_COLS) if is_valid_move(board, c)]
+                col = random.choice(valid) if valid else None
+            if col is None:
+                return jsonify({'error': 'Aucun coup valide'}), 400
+            row = get_next_open_row(board, col)
+        else:
+            # Le joueur joue
+            if column == -1 or not is_valid_move(board, column):
+                return jsonify({'error': 'Colonne invalide'}), 400
+            col = column
+            row = get_next_open_row(board, col)
+
+        if row is None or not drop_piece(board, row, col, current_player):
+            return jsonify({'error': 'Impossible de placer le jeton'}), 400
+
+        is_win, winning_cells = check_win(board, row, col, current_player)
+        game_over = is_win or is_board_full(board)
+
+        game_state['last_move'] = [row, col]
+        game_state['winning_cells'] = winning_cells
+        game_state['move_history'].append([row, col, current_player])
+        game_state['game_over'] = game_over
+
+        if game_over:
+            game_state['winner'] = current_player if is_win else 0
+            game_state['current_player'] = None
+            save_finished_game_to_db(game_state)
+        else:
+            # Alterner le joueur courant
+            game_state['current_player'] = JAUNE if current_player == ROUGE else ROUGE
+
+        # Recalculer scores minimax
+        if not game_over:
+            weights = load_learning_weights()
+            try:
+                scores_list = calculate_minimax_scores(board, game_state['current_player'], 5, weights)
+                game_state['minimax_scores'] = [round(s, 1) if s != -float('inf') else -1000000 for s in scores_list]
+            except Exception:
+                game_state['minimax_scores'] = [0] * BOARD_COLS
+
+        session['game_state'] = game_state
+
+        return jsonify({
+            'success': True,
+            'board': board,
+            'current_player': game_state['current_player'],
+            'last_move': [row, col],
+            'game_over': game_over,
+            'winner': current_player if is_win else (0 if game_over else None),
+            'winning_cells': [[r, c] for r, c in winning_cells] if is_win else [],
+            'move_history': game_state['move_history'],
+            'played_col': col,
+            'played_row': row,
+            'played_by': who_plays,
+            'minimax_scores': game_state.get('minimax_scores', [])
+        })
+
+    except Exception as e:
+        print(f"Erreur dans play_imported: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/choose_mode')
 def choose_mode():
     """Page pour choisir le mode de jeu"""
@@ -2849,7 +3027,7 @@ def choose_mode():
 
 @app.route('/import_game', methods=['GET', 'POST'])
 def import_game():
-    """Page pour importer une partie depuis un fichier ou une séquence"""
+    """Importe une partie depuis un fichier ou une sequence"""
     if request.method == 'POST':
         try:
             file_content = None
@@ -2865,8 +3043,9 @@ def import_game():
                 flash("Aucun fichier ou séquence fourni", "error")
                 return redirect(url_for('import_game'))
 
-            mode = int(request.form.get('mode', 2))
-            game_state, error = process_import_file(file_content, mode)
+            # On importe toujours en mode neutre (mode 2)
+            # Le choix joueur/IA se fait coup par coup dans game_imported
+            game_state, error = process_import_file(file_content, mode=2)
 
             if error:
                 flash(f"Erreur: {error}", "error")
@@ -2877,50 +3056,40 @@ def import_game():
                 return redirect(url_for('import_game'))
 
             game_id = str(uuid.uuid4())
-            ai_type = 'random' if mode == 0 else ('minimax' if mode == 1 else None)
-            ai_depth = 5
 
             session['game_state'] = {
                 'board': game_state['board'],
                 'current_player': game_state['current_player'],
-                'mode': mode,
-                'ai_type': ai_type,
-                'ai_depth': ai_depth,
+                'mode': 1,
+                'ai_type': 'minimax',
+                'ai_depth': load_learning_weights().get('depth', 5),
                 'move_history': game_state['move_history'],
                 'game_over': game_state['game_over'],
                 'winner': game_state['winner'],
                 'last_move': game_state['move_history'][-1] if game_state['move_history'] else None,
                 'winning_cells': game_state['winning_cells'],
-                'game_id': game_id
+                'game_id': game_id,
+                'is_imported': True
             }
 
             session['game_state'] = validate_and_fix_game_state(session['game_state'])
 
-            if mode == 1 and ai_type == 'minimax':
-                weights = load_learning_weights()
-                try:
-                    scores = calculate_minimax_scores(game_state['board'], ROUGE, ai_depth, weights)
-                    session['game_state']['minimax_scores'] = [round(s, 1) if s != -float('inf') else -1000000 for s in scores]
-                except Exception as e:
-                    print(f"Erreur lors du calcul initial des scores Minimax: {e}")
-                    session['game_state']['minimax_scores'] = [0] * BOARD_COLS
-
             if game_state['game_over']:
                 save_finished_game_to_db(session['game_state'])
+                flash(f"Partie importee (terminee) — ID: {game_id}", "success")
+                return redirect(url_for('game_imported'))
 
-            flash(f"Partie importée avec succès (ID: {game_id})", "success")
+            # Calculer scores minimax pour affichage
+            depth = session['game_state']['ai_depth']
+            weights = load_learning_weights()
+            try:
+                scores = calculate_minimax_scores(session['game_state']['board'], ROUGE, depth, weights)
+                session['game_state']['minimax_scores'] = [round(s, 1) if s != -float('inf') else -1000000 for s in scores]
+            except Exception:
+                session['game_state']['minimax_scores'] = [0] * BOARD_COLS
 
-            if mode == 0:
-                return redirect(url_for('game_ia_vs_ia'))
-            elif mode == 1:
-                if ai_type == 'minimax':
-                    return redirect(url_for('game_player_vs_minimax_ia'))
-                else:
-                    return redirect(url_for('game_player_vs_random_ia'))
-            elif mode == 2:
-                return redirect(url_for('game_player_vs_player'))
-            else:
-                return redirect(url_for('index'))
+            flash(f"Partie importee avec succes (ID: {game_id})", "success")
+            return redirect(url_for('game_imported'))
 
         except Exception as e:
             flash(f"Erreur: {str(e)}", "error")
