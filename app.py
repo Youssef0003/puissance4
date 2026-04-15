@@ -2281,31 +2281,25 @@ def get_minimax_scores():
 # ====================== ROUTES DE GESTION DES PARTIES ======================
 @app.route('/undo', methods=['POST'])
 def undo():
-    """Annule le dernier coup joué"""
+    """Annule le dernier coup joue pour tous les modes"""
     if 'game_state' not in session or not session['game_state']['move_history']:
-        return jsonify({'error': 'Aucun coup à annuler'}), 400
+        return jsonify({'error': 'Aucun coup a annuler'}), 400
 
     try:
         game_state = session['game_state']
         board = game_state['board']
+        mode = game_state['mode']
 
         if len(game_state['move_history']) == 0:
-            return jsonify({'error': 'Aucun coup à annuler'}), 400
+            return jsonify({'error': 'Aucun coup a annuler'}), 400
 
+        # Enlever le dernier coup joue
         last_row, last_col, last_player = game_state['move_history'][-1]
         board[last_row][last_col] = EMPTY
         game_state['move_history'].pop()
 
-        if game_state['mode'] == 1 and len(game_state['move_history']) > 0:
-            prev_row, prev_col, prev_player = game_state['move_history'][-1]
-            if prev_player == JAUNE:
-                board[prev_row][prev_col] = EMPTY
-                game_state['move_history'].pop()
-                game_state['current_player'] = ROUGE
-            else:
-                game_state['current_player'] = JAUNE
-        else:
-            game_state['current_player'] = JAUNE if last_player == ROUGE else ROUGE
+        # Redonner le tour au joueur qui vient d annuler
+        game_state['current_player'] = last_player
 
         game_state['game_over'] = False
         game_state['winner'] = None
@@ -2314,13 +2308,14 @@ def undo():
 
         game_state = validate_and_fix_game_state(game_state)
 
-        if game_state['mode'] == 1 and game_state['ai_type'] == 'minimax':
+        # Recalculer les scores Minimax si mode 1
+        if mode == 1 and game_state.get('ai_type') == 'minimax':
             weights = load_learning_weights()
             try:
                 scores = calculate_minimax_scores(game_state['board'], ROUGE, game_state['ai_depth'], weights)
                 game_state['minimax_scores'] = [round(s, 1) if s != -float('inf') else -1000000 for s in scores]
             except Exception as e:
-                print(f"Erreur lors du calcul des scores Minimax après annulation: {e}")
+                print(f"Erreur calcul scores Minimax apres annulation: {e}")
                 game_state['minimax_scores'] = [0] * BOARD_COLS
 
         session['game_state'] = game_state
