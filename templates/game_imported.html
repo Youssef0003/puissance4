@@ -263,10 +263,15 @@ let isProcessing = false;
 let waitingForPlayerCol = false;
 let gameOver = {{ 'true' if game_state.game_over else 'false' }};
 
-// Afficher le modal d explication au premier chargement
+// Afficher le modal d explication a chaque chargement de la page
 {% if not game_state.game_over %}
-const helpModal = new bootstrap.Modal(document.getElementById('helpModal'));
-helpModal.show();
+window.addEventListener('load', function() {
+    const helpModal = new bootstrap.Modal(document.getElementById('helpModal'), {
+        backdrop: 'static',
+        keyboard: false
+    });
+    helpModal.show();
+});
 {% endif %}
 
 function showError(msg) {
