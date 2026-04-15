@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Choisir le prochain joueur{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="text-center mb-4">Partie importée — Qui joue le prochain coup ?</h2>
+
+    <!-- Aperçu du plateau -->
+    <div class="row justify-content-center mb-4">
+        <div class="col-auto">
+            <div class="card">
+                <div class="card-header bg-dark text-white text-center">
+                    <h5 class="mb-0">État actuel du plateau ({{ move_count }} coups joués)</h5>
+                </div>
+                <div class="card-body d-flex justify-content-center">
+                    <div style="display:inline-grid; grid-template-columns: repeat({{ BOARD_COLS }}, 44px);
+                                gap: 3px; background:#1a3a6e; padding:6px; border-radius:8px;">
+                        {% for r in range(BOARD_ROWS) %}
+                            {% for c in range(BOARD_COLS) %}
+                            <div style="width:44px; height:44px; border-radius:50%;
+                                        background:{% if board[r][c] == ROUGE %}#dc3545{% elif board[r][c] == JAUNE %}#ffc107{% else %}#0d1b2a{% endif %};
+                                        display:flex; align-items:center; justify-content:center;">
+                            </div>
+                            {% endfor %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Choix du prochain joueur -->
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white text-center">
+                    <h5 class="mb-0">Qui joue le prochain coup ?</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="row g-3 mb-4">
+                            <div class="col-6">
+                                <div class="form-check p-0">
+                                    <input class="d-none" type="radio" name="next_player"
+                                           id="choixRouge" value="{{ ROUGE }}" checked>
+                                    <label class="btn btn-outline-danger w-100 py-3 fs-5" for="choixRouge">
+                                        🔴 Rouge
+                                        {% if game.mode == 1 %}
+                                        <br><small class="fs-6">(Vous)</small>
+                                        {% endif %}
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-check p-0">
+                                    <input class="d-none" type="radio" name="next_player"
+                                           id="choixJaune" value="{{ JAUNE }}">
+                                    <label class="btn btn-outline-warning w-100 py-3 fs-5" for="choixJaune">
+                                        🟡 Jaune
+                                        {% if game.mode == 1 %}
+                                        <br><small class="fs-6">(IA)</small>
+                                        {% endif %}
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info small mb-3">
+                            <i class="bi bi-info-circle"></i>
+                            {% if game.mode == 0 %}
+                                Mode <strong>IA vs IA</strong> — les deux joueurs sont des IA.
+                            {% elif game.mode == 1 %}
+                                Mode <strong>Joueur vs IA</strong> — Rouge c'est vous, Jaune c'est l'IA.
+                                Si vous choisissez Jaune, l'IA jouera immédiatement.
+                            {% else %}
+                                Mode <strong>Joueur vs Joueur</strong> — choisissez qui commence.
+                            {% endif %}
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-play-circle"></i> Lancer la partie
+                            </button>
+                            <a href="{{ url_for('import_game') }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left"></i> Retour
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Style des boutons radio custom
+document.querySelectorAll('input[name="next_player"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        document.querySelectorAll('input[name="next_player"]').forEach(r => {
+            const label = document.querySelector(`label[for="${r.id}"]`);
+            if (r.checked) {
+                label.classList.add('active');
+                if (r.value === '{{ ROUGE }}') {
+                    label.classList.replace('btn-outline-danger', 'btn-danger');
+                } else {
+                    label.classList.replace('btn-outline-warning', 'btn-warning');
+                }
+            } else {
+                label.classList.remove('active');
+                if (r.value === '{{ ROUGE }}') {
+                    label.classList.replace('btn-danger', 'btn-outline-danger');
+                } else {
+                    label.classList.replace('btn-warning', 'btn-outline-warning');
+                }
+            }
+        });
+    });
+});
+
+// Activer le premier bouton par defaut
+document.getElementById('choixRouge').dispatchEvent(new Event('change'));
+</script>
+{% endblock %}

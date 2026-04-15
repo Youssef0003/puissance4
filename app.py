@@ -2327,6 +2327,59 @@ def undo():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/undo_one', methods=['POST'])
+def undo_one():
+    """Annule le dernier coup joue et redonne le tour au joueur concerne"""
+    if 'game_state' not in session or not session['game_state']['move_history']:
+        return jsonify({'error': 'Aucun coup a annuler'}), 400
+
+    try:
+        game_state = session['game_state']
+        board = game_state['board']
+
+        if len(game_state['move_history']) == 0:
+            return jsonify({'error': 'Aucun coup a annuler'}), 400
+
+        # Enlever le dernier coup joue
+        last_row, last_col, last_player = game_state['move_history'][-1]
+        board[last_row][last_col] = EMPTY
+        game_state['move_history'].pop()
+
+        # Redonner le tour au joueur dont on vient d annuler le coup
+        game_state['current_player'] = last_player
+        game_state['game_over'] = False
+        game_state['winner'] = None
+        game_state['last_move'] = game_state['move_history'][-1] if game_state['move_history'] else None
+        game_state['winning_cells'] = []
+
+        game_state = validate_and_fix_game_state(game_state)
+
+        # Recalculer scores Minimax si besoin
+        if game_state['mode'] == 1 and game_state.get('ai_type') == 'minimax':
+            weights = load_learning_weights()
+            try:
+                scores = calculate_minimax_scores(game_state['board'], ROUGE, game_state['ai_depth'], weights)
+                game_state['minimax_scores'] = [round(s, 1) if s != -float('inf') else -1000000 for s in scores]
+            except Exception as e:
+                game_state['minimax_scores'] = [0] * BOARD_COLS
+
+        session['game_state'] = game_state
+
+        return jsonify({
+            'success': True,
+            'board': board,
+            'current_player': game_state['current_player'],
+            'move_history': game_state['move_history'],
+            'last_move': game_state['last_move'],
+            'minimax_scores': game_state.get('minimax_scores', [])
+        })
+
+    except Exception as e:
+        print(f"Erreur dans undo_one: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/replay/<int:mode>')
 def replay(mode):
     """Recommence une partie avec les mêmes paramètres"""
